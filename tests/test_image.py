@@ -321,3 +321,17 @@ def test_require_bfl_url_accepts_subdomains() -> None:
     """Les sous-domaines de bfl.ai (delivery, api.eu) sont acceptés."""
     assert _require_bfl_url(SAMPLE_URL) == SAMPLE_URL
     assert _require_bfl_url("https://bfl.ai/x") == "https://bfl.ai/x"
+
+
+def test_placeholder_without_truetype_font(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sans police TrueType, la police intégrée sert, texte sans accents."""
+    monkeypatch.setattr(image_service, "FONT_CANDIDATES", ("police-introuvable.ttf",))
+
+    data = placeholder_image("triste", "Un été à la mer")
+
+    assert Image.open(io.BytesIO(data)).size == (image_service.PLACEHOLDER_SIZE,) * 2
+
+
+def test_strip_accents() -> None:
+    """Les diacritiques sont retirés, le reste est conservé."""
+    assert image_service.strip_accents("Image simulée, été, Noël") == "Image simulee, ete, Noel"

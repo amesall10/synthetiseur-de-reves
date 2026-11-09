@@ -338,3 +338,56 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
 - **Écarté** : FLUX.1 [dev] (prix presque triple) ; l'endpoint global
   `api.bfl.ai` (routage hors UE possible).
 
+## D24. Étapes idempotentes : verrou posé en base avant tout appel payant
+
+- **Contexte** : la page « Traitement » appelle trois étapes en JavaScript.
+  Un double clic, un rechargement ou un second onglet ne doivent jamais
+  payer deux fois. NAVI ne s'en protégeait que côté navigateur (`useRef`).
+- **Décision** : chaque étape vérifie d'abord le statut du rêve : déjà faite
+  → résultat enregistré renvoyé sans appel ; pas encore permise → 409 ;
+  consentement absent en base → 403. Sinon, elle pose un verrou par une
+  mise à jour **conditionnelle** (`UPDATE … SET step_started_at = now WHERE
+  status = attendu AND (step_started_at IS NULL OR verrou de plus de 3 min)`),
+  atomique en SQL : une seule requête l'obtient, les autres reçoivent
+  « processing » (202) et la page réessaie toutes les 2 s. Un verrou de plus
+  de 3 minutes (processus tué, supérieur au timeout Gunicorn) est repris.
+  Toute exception imprévue fait passer le rêve en `failed` avec un message ;
+  la vue a un second filet : **aucune réponse 500**. Le coût du rêve est
+  recalculé depuis `ApiCall` après chaque étape.
+- **Écarté** : `select_for_update` pendant l'appel d'API (transaction ouverte
+  30 à 90 s, et verrou de toute la base sous SQLite) ; une file de tâches
+  (exclue par le cadrage).
+
+## D25. Audio : type reconnu au contenu, limites, effacement dès la transcription
+
+- **Contexte** : l'audio arrive du navigateur (MediaRecorder, WebM/Opus) ou
+  d'un import (WAV, MP3). Le nom et le type MIME envoyés par le client sont
+  falsifiables, et la durée ne doit jamais venir de lui (faille de NAVI).
+- **Décision** : le format est reconnu à la signature des premiers octets
+  (WebM, Ogg, WAV, MP3), 10 Mo au plus. Pour le WAV, la durée se lit dans
+  l'en-tête (bibliothèque standard) et un fichier de plus de 5 minutes est
+  refusé **avant** tout appel payant. Pour WebM et MP3, elle n'est connue
+  qu'après la transcription (fin du dernier segment) : au-delà de 5 minutes,
+  le rêve passe en échec et rien n'est conservé. L'enregistreur s'arrête
+  seul à 5 minutes (32 kbit/s, soit environ 1,2 Mo). L'audio est effacé dès
+  que l'étape de transcription se termine (réussite, simulation ou échec) ;
+  le consentement et l'IP (preuve) sont enregistrés dans la même transaction
+  que le rêve. Safari n'enregistre pas en WebM : l'enregistreur s'y désactive
+  et propose l'import de fichier.
+- **Écarté** : ffmpeg dans l'image pour mesurer toutes les durées avant
+  l'appel (environ 100 Mo de plus pour un cas que l'enregistreur borne déjà) ;
+  garder l'audio pour pouvoir relancer la transcription (contraire à la
+  minimisation, et aucune fonction de relance n'est prévue).
+
+## D26. Police avec accents pour l'image de remplacement
+
+- **Contexte** : au premier rendu, l'image de remplacement affichait
+  « J'▯tais » : la police intégrée à Pillow n'a pas de lettres accentuées.
+- **Décision** : chercher une police TrueType (DejaVu Sans Bold, installée
+  dans l'image Docker par `fonts-dejavu-core`, environ 1 Mo ; Arial sur un
+  poste Windows), et sinon garder la police intégrée en retirant les
+  accents du texte, plutôt que d'afficher des carrés.
+- **Écarté** : versionner un fichier de police dans le dépôt (binaire et
+  licence à suivre) ; retirer les accents dans tous les cas (texte français
+  dégradé sans raison).
+

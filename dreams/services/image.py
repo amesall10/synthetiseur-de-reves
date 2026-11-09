@@ -19,6 +19,7 @@ from __future__ import annotations
 import io
 import logging
 import textwrap
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
@@ -293,19 +294,47 @@ EMOTION_COLORS: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
 }
 
 
-def _font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
-    """Police par défaut de Pillow, à la taille demandée si possible.
+# Polices TrueType avec accents, de la plus probable à la moins probable :
+# DejaVu (installée dans l'image Docker), puis Arial (postes Windows).
+# La police intégrée à Pillow n'a pas les lettres accentuées.
+FONT_CANDIDATES: tuple[str, ...] = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "DejaVuSans-Bold.ttf",
+    "arialbd.ttf",
+)
+
+Font = ImageFont.ImageFont | ImageFont.FreeTypeFont
+
+
+def _font(size: int) -> tuple[Font, bool]:
+    """Police du texte de l'image de remplacement.
 
     Args:
         size: Taille en pixels.
 
     Returns:
-        La police (bitmap de taille fixe si FreeType est indisponible).
+        La police, et ``True`` si elle gère les accents (police TrueType
+        trouvée) ; sinon la police intégrée à Pillow, sans accents.
     """
-    try:
-        return ImageFont.load_default(size=size)
-    except (TypeError, ImportError, OSError):  # pragma: no cover - Pillow sans FreeType
-        return ImageFont.load_default()
+    for name in FONT_CANDIDATES:
+        try:
+            return ImageFont.truetype(name, size), True
+        except OSError:
+            continue
+    return ImageFont.load_default(size=size), False
+
+
+def strip_accents(text: str) -> str:
+    """Retire les accents d'un texte (« Image simulée » → « Image simulee »).
+
+    Args:
+        text: Texte d'origine.
+
+    Returns:
+        Le texte sans diacritiques, pour une police qui ne les a pas.
+    """
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
 
 
 def placeholder_image(emotion: str, title: str = "") -> bytes:
@@ -326,13 +355,17 @@ def placeholder_image(emotion: str, title: str = "") -> bytes:
     draw = ImageDraw.Draw(image)
     label = Emotion(emotion).label if emotion in Emotion.values else Emotion.NEUTRE.label
     text = textwrap.fill(" ".join((title or label).split())[:120], width=26)
-    font = _font(44)
+    caption = "Image simulée"
+    font, has_accents = _font(40)
+    small, _ = _font(22)
+    if not has_accents:
+        text, caption = strip_accents(text), strip_accents(caption)
     box = draw.multiline_textbbox((0, 0), text, font=font, align="center", spacing=12)
     x = (size[0] - (box[2] - box[0])) / 2
     y = (size[1] - (box[3] - box[1])) / 2
     draw.multiline_text((x + 2, y + 2), text, font=font, fill=(0, 0, 0), align="center", spacing=12)
     draw.multiline_text((x, y), text, font=font, fill=(255, 255, 255), align="center", spacing=12)
-    draw.text((24, size[1] - 48), "Image simulée", font=_font(24), fill=(255, 255, 255))
+    draw.text((24, size[1] - 48), caption, font=small, fill=(255, 255, 255))
 
     buffer = io.BytesIO()
     image.save(buffer, format="PNG", optimize=True)

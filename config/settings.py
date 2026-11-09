@@ -52,6 +52,9 @@ SECURE_COOKIES: bool = env.bool("DJANGO_SECURE_COOKIES", default=not DEBUG)
 SESSION_COOKIE_SECURE = SECURE_COOKIES
 CSRF_COOKIE_SECURE = SECURE_COOKIES
 SECURE_CONTENT_TYPE_NOSNIFF = True
+# Derrière le proxy de Render : adresse client lue dans X-Forwarded-For
+# (preuve de consentement). Désactivé par défaut, falsifiable sans proxy.
+USE_X_FORWARDED_FOR: bool = env.bool("USE_X_FORWARDED_FOR", default=False)
 X_FRAME_OPTIONS = "DENY"
 
 # ---------------------------------------------------------------------------
