@@ -6,6 +6,16 @@
   <title>{% block title %}Synthétiseur de rêves{% endblock %}</title>
   {# Tailwind via CDN (choix de stack : pas de build front). Version figée. #}
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11"></script>
+  <style>
+    /* Champs générés par Django ({{ form }}) : style commun sans widget sur mesure. */
+    form input[type=text], form input[type=password], form input[type=email],
+    form input[type=date], form select, form textarea {
+      width: 100%; margin-top: .25rem; padding: .5rem .75rem; border-radius: .375rem;
+      background: #0f172a; border: 1px solid #334155; color: #f1f5f9;
+    }
+    form .helptext, form ul:not(.errorlist) { font-size: .8rem; color: #94a3b8; }
+    form .errorlist { font-size: .85rem; color: #fca5a5; }
+  </style>
   {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
@@ -13,7 +23,18 @@
     <nav class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
       <a href="{% url 'home' %}" class="text-lg font-semibold text-indigo-300">Synthétiseur de rêves</a>
       <div class="flex flex-wrap items-center gap-4 text-sm">
-        {% block nav %}{% endblock %}
+        {% block nav %}
+          {% if user.is_authenticated %}
+            <a href="{% url 'accounts:profile' %}" class="hover:text-indigo-300">Mon espace</a>
+            <form method="post" action="{% url 'logout' %}">
+              {% csrf_token %}
+              <button type="submit" class="hover:text-indigo-300">Se déconnecter</button>
+            </form>
+          {% else %}
+            <a href="{% url 'login' %}" class="hover:text-indigo-300">Connexion</a>
+            <a href="{% url 'accounts:signup' %}" class="rounded-md bg-indigo-600 px-3 py-1.5 font-medium hover:bg-indigo-500">Créer un compte</a>
+          {% endif %}
+        {% endblock %}
       </div>
     </nav>
   </header>

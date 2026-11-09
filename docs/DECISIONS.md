@@ -69,3 +69,13 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   commits déjà intégrés).
 - **Écarté** : fusionner localement dans `main` ; on perdrait la trace des PR
   et de la CI exigée par le sujet.
+
+## D7. Compte minimal : identifiant + mot de passe, suppression confirmée
+
+- **Contexte** : les récits de rêve sont des données potentiellement sensibles ;
+  moins on collecte de données d'identification, moins une fuite est grave.
+- **Décision** : inscription par `UserCreationForm` (identifiant + mot de passe,
+  pas d'adresse e-mail). La suppression du compte exige le mot de passe actuel
+  et supprime tout en cascade. Déconnexion uniquement en POST (Django 5).
+- **Écarté** : e-mail obligatoire avec réinitialisation du mot de passe ;
+  utile en production mais hors périmètre, et c'est une donnée de plus à protéger.

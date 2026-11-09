@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Créer un compte · Synthétiseur de rêves{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-sm">
+  <h1 class="mb-6 text-2xl font-semibold">Créer un compte</h1>
+  <form method="post">
+    {% csrf_token %}
+    {% include "_form.html" %}
+    <button type="submit" class="w-full rounded-md bg-indigo-600 px-4 py-2 font-medium hover:bg-indigo-500">Créer mon compte</button>
+  </form>
+  <p class="mt-4 text-sm text-slate-400">
+    Déjà inscrit ? <a href="{% url 'login' %}" class="text-indigo-300 underline">Se connecter</a>
+  </p>
+</div>
+{% endblock %}
