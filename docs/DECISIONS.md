@@ -269,3 +269,28 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
 - **Écarté** : convertir les euros avec un taux figé (faux dès qu'il bouge) ;
   supprimer le secours (perte de résilience pour un coût quasi nul).
 
+## D21. Amorçage de la CI : PR #18 fusionnée sans CI (exception unique)
+
+- **Contexte** : la PR #18 (ticket 1) apporte le workflow
+  `.github/workflows/ci.yml` lui-même. Tant que `main` ne contenait aucun
+  workflow (seulement `.gitignore`), GitHub n'en enregistrait aucun : l'onglet
+  Actions affichait « Get started with GitHub Actions » et aucune exécution
+  n'était créée, même après fermeture et réouverture de la PR. Un incident
+  GitHub (Actions, Webhooks) en cours le même jour a d'abord brouillé le
+  diagnostic.
+- **Décision** : fusionner #18 sans CI, après validation locale des mêmes
+  étapes (ruff, pytest sur SQLite et PostgreSQL 16, build Docker + test de
+  fumée, `docker compose up` en 200) et des tests manuels ; l'explication est
+  laissée en commentaire sur la PR. C'est la seule exception : la CI s'est
+  déclenchée dès la PR suivante (#20), et toutes les autres ne sont fusionnées
+  qu'avec une CI verte. Le workflow accepte aussi `workflow_dispatch` pour un
+  lancement manuel.
+- **Incident associé** : supprimer la branche de #18 à la fusion a **fermé**
+  la PR empilée #20 (dont c'était la base) au lieu de la recibler. Corrigé en
+  recréant la branche, en rouvrant #20 et en la reciblant sur `main`. Pour les
+  fusions suivantes : recibler la PR enfant sur `main` **avant** de supprimer
+  la branche fusionnée.
+- **Écarté** : un commit direct du workflow sur `main` pour amorcer (interdit
+  par la règle « jamais de commit direct sur `main` ») ; attendre la fin de
+  l'incident GitHub (le problème venait en fait de l'amorçage).
+
