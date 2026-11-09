@@ -79,3 +79,54 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   et supprime tout en cascade. Déconnexion uniquement en POST (Django 5).
 - **Écarté** : e-mail obligatoire avec réinitialisation du mot de passe ;
   utile en production mais hors périmètre, et c'est une donnée de plus à protéger.
+
+## D8. `ApiCall` porte aussi l'utilisateur, et survit aux suppressions
+
+- **Contexte** : le cadrage liste `dream` (nullable) mais pas `user`. Or le
+  plafond de budget est mensuel : si le coût n'était rattaché qu'au rêve,
+  supprimer ses rêves remettrait le compteur à zéro.
+- **Décision** : champ `user` ajouté. `dream` et `user` sont en `SET_NULL` :
+  supprimer un rêve ou un compte efface les données personnelles mais garde la
+  trace technique (étape, fournisseur, latence, coût), qui ne contient aucun
+  contenu de rêve. Le budget global du mois reste ainsi exact.
+- **Écarté** : `CASCADE` (le coût disparaîtrait) ; dupliquer le coût dans un
+  compteur mensuel par utilisateur (deux sources de vérité).
+
+## D9. La preuve de consentement survit à la suppression du rêve
+
+- **Contexte** : supprimer un rêve doit effacer tous ses champs ; mais le
+  consentement est une preuve de conformité (responsabilité, art. 5.2 RGPD).
+- **Décision** : `ConsentRecord.dream` en `SET_NULL` (la preuve ne contient
+  aucun contenu du rêve) ; `ConsentRecord.user` en `CASCADE`, car la
+  suppression du compte doit tout supprimer.
+- **Écarté** : supprimer la preuve avec le rêve (on ne pourrait plus démontrer
+  qu'un traitement passé était consenti).
+
+## D10. Montants en `Decimal`, contraintes d'intégrité en base
+
+- **Contexte** : les coûts unitaires sont minuscules (≈ 0,0001 $) et cumulés
+  sur un mois ; les flottants accumulent des erreurs d'arrondi.
+- **Décision** : `DecimalField(max_digits=10, decimal_places=6)` pour tous les
+  coûts. L'intensité (0 à 1) et l'émotion (6 valeurs) sont aussi protégées par
+  des `CheckConstraint` en base, en plus des validateurs Django : une valeur
+  invalide venue du LLM ne peut pas être enregistrée, même par erreur de code.
+- **Écarté** : `FloatField` pour les coûts ; validation uniquement applicative
+  (c'est précisément ce que NAVI ne faisait pas).
+
+## D11. Admin en lecture seule, sans contenu de rêve
+
+- **Contexte** : un récit de rêve peut contenir des données de santé ou
+  intimes ; l'admin n'a pas besoin de les lire pour superviser le service.
+- **Décision** : l'admin affiche statuts, sources, coûts et appels d'API ; il
+  n'affiche jamais l'audio, la transcription, le résumé, le prompt ni l'image,
+  et n'autorise ni ajout ni modification (seul le pipeline écrit).
+- **Écarté** : l'admin Django par défaut, qui exposerait tout le contenu.
+
+## D12. `ruff.toml` repris tel quel, migrations corrigées après génération
+
+- **Contexte** : la configuration ruff de NAVI n'exclut pas les migrations,
+  dont les imports générés par Django ne respectent pas l'ordre attendu (I001).
+- **Décision** : garder `ruff.toml` inchangé (consigne) et passer
+  `ruff check --fix && ruff format` après chaque `makemigrations`.
+- **Écarté** : ajouter `*/migrations/*` à `exclude` (modifie la configuration
+  imposée).
