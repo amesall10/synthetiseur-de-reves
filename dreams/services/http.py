@@ -189,7 +189,7 @@ def _body_snippet(response: httpx.Response) -> str:
     return " ".join(response.text.split())[:BODY_SNIPPET_LENGTH]
 
 
-def _record(
+def record_call(
     meta: CallMeta,
     *,
     status_code: int | None,
@@ -199,6 +199,10 @@ def _record(
     error: str,
 ) -> None:
     """Enregistre l'appel en base et écrit une ligne de log structurée.
+
+    Utilisée par ``post_with_retry`` et par les services pour tracer un
+    résultat simulé (``source=mock``) : chaque étape de chaque rêve laisse
+    ainsi exactement une ligne réussie, base du taux de mode dégradé.
 
     Un échec d'écriture en base est journalisé mais n'interrompt pas le
     traitement : l'application doit toujours répondre.
@@ -353,7 +357,7 @@ def post_with_retry(
                 "event=api_cost_unavailable step=%s provider=%s", meta.step, meta.provider
             )
 
-    _record(
+    record_call(
         meta,
         status_code=status_code,
         latency_ms=latency_ms,

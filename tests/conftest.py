@@ -13,6 +13,9 @@ from django.test import Client
 from dreams.models import ConsentRecord, Dream
 from dreams.services import http as http_service
 
+# Type de la fixture ``settings`` de pytest-django (classe non exportée).
+SettingsWrapper = Any
+
 PASSWORD = "Mot-de-passe-de-test-42"
 
 # Quelques octets suffisent : aucun test n'envoie l'audio à une vraie API.

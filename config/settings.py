@@ -150,6 +150,19 @@ IMAGE_PROVIDER: str = env.str("IMAGE_PROVIDER", default="mock")
 MONTHLY_BUDGET_USD: float = env.float("MONTHLY_BUDGET_USD", default=20.0)
 DREAM_RETENTION_DAYS: int = env.int("DREAM_RETENTION_DAYS", default=365)
 
+# Transcription (Voxtral). Le modèle reste surchargeable : la doc Mistral
+# recommande désormais voxtral-mini-transcribe-3 sans dire si l'alias
+# voxtral-mini-latest pointe dessus (cf. DECISIONS D17).
+MISTRAL_STT_URL: str = env.str(
+    "MISTRAL_STT_URL", default="https://api.mistral.ai/v1/audio/transcriptions"
+)
+MISTRAL_STT_MODEL: str = env.str("MISTRAL_STT_MODEL", default="voxtral-mini-latest")
+AUDIO_MAX_BYTES: int = env.int("AUDIO_MAX_BYTES", default=10 * 1024 * 1024)
+AUDIO_MAX_SECONDS: int = env.int("AUDIO_MAX_SECONDS", default=300)
+
+# Coûts unitaires en USD (relevés sur docs.mistral.ai le 2026-11-09, D18).
+VOXTRAL_COST_PER_MINUTE_USD: float = env.float("VOXTRAL_COST_PER_MINUTE_USD", default=0.0035)
+
 # ---------------------------------------------------------------------------
 # Journalisation : une ligne lisible par événement, sur la sortie standard
 # (collectée par Docker et Render).
