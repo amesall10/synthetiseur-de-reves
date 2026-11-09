@@ -69,6 +69,9 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   commits déjà intégrés).
 - **Écarté** : fusionner localement dans `main` ; on perdrait la trace des PR
   et de la CI exigée par le sujet.
+- **Suite (9 novembre)** : après `gh auth login`, dépôt privé créé, issues
+  #1 à #17 et Project GitHub créés ; les PR des tickets 1 à 4 sont ouvertes
+  et fusionnées une à une après CI verte.
 
 ## D7. Compte minimal : identifiant + mot de passe, suppression confirmée
 

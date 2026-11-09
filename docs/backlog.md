@@ -1,28 +1,29 @@
 # Backlog — Synthétiseur de rêves
 
-`gh` n'étant pas authentifié au démarrage, le backlog vit ici en attendant
-d'être recopié en issues GitHub (labels : `must`, `should`, `could`, `infra`,
-`test`, `docs`). Rendu : 15 novembre.
+Source de vérité : les issues GitHub #1 à #17 (même numérotation que les
+tickets) et le [Project « Synthétiseur de rêves »](https://github.com/users/amesall10/projects/2).
+Ce fichier en garde une copie lisible hors ligne. Labels : `must`, `should`,
+`could`, `infra`, `test`, `docs`. Rendu : 15 novembre.
 
 | # | Ticket | Labels | Branche | État |
 |---|--------|--------|---------|------|
-| 1 | Squelette Django, settings par env, Docker, compose, CI | infra, must | `feat/1-squelette-django` | fait |
-| 2 | Authentification et espace utilisateur | must | `feat/2-authentification` | fait |
-| 3 | Modèles Dream / ConsentRecord / ApiCall + admin | must | `feat/3-modeles` | fait |
-| 4 | `post_with_retry` unique + ApiCall + tests | must | `feat/4-post-with-retry` | fait |
-| 5 | Transcription Voxtral + mock | must | | à faire |
-| 6 | Analyse émotionnelle + prompt d'image (Mistral → Scaleway → mock) | must | | à faire |
-| 7 | Génération d'image BFL + remplacement local | must | | à faire |
-| 8 | Enregistrement audio + parcours de traitement idempotent | must | | à faire |
-| 9 | Historique avec filtres date/émotion | must | | à faire |
-| 10 | Dashboard statistiques | must | | à faire |
-| 11 | Plafond de budget | should | | à faire |
-| 12 | Page Métriques + /health + logs + Sentry | should | | à faire |
-| 13 | RGPD : consentement, suppression, purge | must | | à faire |
-| 14 | Déploiement Render automatisé | infra, must | | à faire |
-| 15 | README, install.sh, .env.example | docs, must | | à faire |
-| 16 | Test de charge | test, should | | à faire |
-| 17 | Micro-vidéo + ambiance sonore | could | | **hors périmètre** |
+| [#1](https://github.com/amesall10/synthetiseur-de-reves/issues/1) | Squelette Django, settings par env, Docker, compose, CI | infra, must | `feat/1-squelette-django` | fait |
+| [#2](https://github.com/amesall10/synthetiseur-de-reves/issues/2) | Authentification et espace utilisateur | must | `feat/2-authentification` | fait |
+| [#3](https://github.com/amesall10/synthetiseur-de-reves/issues/3) | Modèles Dream / ConsentRecord / ApiCall + admin | must | `feat/3-modeles` | fait |
+| [#4](https://github.com/amesall10/synthetiseur-de-reves/issues/4) | `post_with_retry` unique + ApiCall + tests | must | `feat/4-post-with-retry` | fait |
+| [#5](https://github.com/amesall10/synthetiseur-de-reves/issues/5) | Transcription Voxtral + mock | must | | à faire |
+| [#6](https://github.com/amesall10/synthetiseur-de-reves/issues/6) | Analyse émotionnelle + prompt d'image (Mistral → Scaleway → mock) | must | | à faire |
+| [#7](https://github.com/amesall10/synthetiseur-de-reves/issues/7) | Génération d'image BFL + remplacement local | must | | à faire |
+| [#8](https://github.com/amesall10/synthetiseur-de-reves/issues/8) | Enregistrement audio + parcours de traitement idempotent | must | | à faire |
+| [#9](https://github.com/amesall10/synthetiseur-de-reves/issues/9) | Historique avec filtres date/émotion | must | | à faire |
+| [#10](https://github.com/amesall10/synthetiseur-de-reves/issues/10) | Dashboard statistiques | must | | à faire |
+| [#11](https://github.com/amesall10/synthetiseur-de-reves/issues/11) | Plafond de budget | should | | à faire |
+| [#12](https://github.com/amesall10/synthetiseur-de-reves/issues/12) | Page Métriques + /health + logs + Sentry | should | | à faire |
+| [#13](https://github.com/amesall10/synthetiseur-de-reves/issues/13) | RGPD : consentement, suppression, purge | must | | à faire |
+| [#14](https://github.com/amesall10/synthetiseur-de-reves/issues/14) | Déploiement Render automatisé | infra, must | | à faire |
+| [#15](https://github.com/amesall10/synthetiseur-de-reves/issues/15) | README, install.sh, .env.example | docs, must | | à faire |
+| [#16](https://github.com/amesall10/synthetiseur-de-reves/issues/16) | Test de charge | test, should | | à faire |
+| [#17](https://github.com/amesall10/synthetiseur-de-reves/issues/17) | Micro-vidéo + ambiance sonore | could | | **hors périmètre** |
 
 ---
 
