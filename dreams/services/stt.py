@@ -163,6 +163,7 @@ def _call_voxtral(audio: bytes, mime: str, dream: Dream | None, *, with_language
         files=files,
         timeout=TIMEOUT_SECONDS,
         cost_fn=_cost,
+        check_fn=lambda r: parse_transcription(r.json()),
     )
     return response.json()
 

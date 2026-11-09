@@ -228,3 +228,44 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
 - **Écarté** : estimer la durée à partir de la taille du fichier (dépend du
   codec) ; décoder l'audio côté serveur (ffmpeg dans l'image : +100 Mo).
 
+## D19. Analyse : un seul appel LLM, réponse validée et contrôlée
+
+- **Contexte** : il faut classer l'émotion, extraire les thèmes, résumer et
+  écrire un prompt d'image. NAVI faisait confiance au JSON du modèle sans le
+  valider.
+- **Décision** : un seul appel Mistral Small (`response_format: json_object`,
+  `temperature` 0,3, `max_tokens` 700 pour borner le coût) renvoie
+  `{emotion, intensity, themes, summary, image_prompt}`. Le serveur valide
+  tout : émotion hors liste → `neutre` (avec quelques variantes ramenées à la
+  liste : « joyeux » → `heureux`, « effrayé » → `effrayant`), intensité bornée
+  à [0, 1] (0,5 si illisible), 5 thèmes au plus sans doublon, textes tronqués.
+  Le style imposé (onirique, sans texte ni filigrane) est ajouté par le
+  serveur au prompt d'image au lieu d'être confié au modèle. La consigne
+  système précise que le récit est une donnée, pas une instruction.
+- **Contrôle de la réponse** : `post_with_retry` reçoit un `check_fn` ; une
+  réponse 200 au JSON inexploitable est tracée **en erreur** (coût compris,
+  puisqu'elle est facturée) et le fournisseur suivant prend le relais. Sans
+  cela, une étape aurait pu laisser deux lignes « réussies » dans `ApiCall`
+  et fausser le taux de mode dégradé.
+- **Analyse simulée** : petits lexiques (émotions, thèmes) appliqués au récit,
+  avec correspondance exacte pour les racines courtes (« mer » ne doit pas
+  reconnaître « mère »). Grossier mais déterministe, et cela réagit au récit.
+- **Écarté** : deux appels (classification, puis prompt) : double coût et
+  double latence ; les *structured outputs* avec schéma JSON : la prise en
+  charge par Scaleway n'est pas documentée (page inaccessible le 2026-11-09).
+
+## D20. Scaleway en secours : tarif prudent, endpoint repris de NAVI
+
+- **Contexte** : la grille Scaleway (lue le 2026-11-09) affiche pour
+  `mistral-small-3.2-24b-instruct-2506` 0,15 € / 0,35 € par million de tokens
+  (entrée / sortie), avec 1 million de tokens offerts. Les pages de référence
+  de l'API (endpoint, `usage`, `json_object`) répondaient 403 : **endpoint et
+  prise en charge de `response_format` non revérifiés**, repris de NAVI
+  (`https://api.scaleway.ai/v1/chat/completions`), où ils fonctionnaient.
+- **Décision** : comptabiliser Scaleway aux tarifs Mistral en dollars
+  (0,15 $ / 0,60 $), plus élevés : le budget est surestimé plutôt que
+  sous-estimé, sans dépendre d'un taux de change. L'offre gratuite est
+  ignorée. Tarifs, URL et modèle restent des réglages.
+- **Écarté** : convertir les euros avec un taux figé (faux dès qu'il bouge) ;
+  supprimer le secours (perte de résilience pour un coût quasi nul).
+

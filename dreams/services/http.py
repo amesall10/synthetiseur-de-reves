@@ -262,6 +262,7 @@ def post_with_retry(
     files: Mapping[str, Any] | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
     cost_fn: CostFn | None = None,
+    check_fn: Callable[[httpx.Response], object] | None = None,
     max_total_s: float = DEFAULT_MAX_TOTAL_SECONDS,
     sleep: Callable[[float], None] | None = None,
 ) -> httpx.Response:
@@ -288,6 +289,10 @@ def post_with_retry(
         cost_fn: Calcule le coût à partir de la réponse réussie (tokens
             consommés, durée audio…) ; une erreur dans ce calcul donne un
             coût nul sans faire échouer l'appel.
+        check_fn: Vérifie le contenu d'une réponse 200 (JSON attendu…) et
+            lève une exception s'il est inexploitable. L'appel est alors tracé
+            en erreur (« réponse invalide »), coût compris puisqu'il a été
+            facturé, et ``ApiCallError`` est levée sans nouvelle tentative.
         max_total_s: Durée totale à ne pas dépasser, tentatives et attentes
             comprises ; une nouvelle tentative qui risquerait de la dépasser
             n'est pas lancée.
@@ -298,7 +303,8 @@ def post_with_retry(
 
     Raises:
         ApiCallError: Si toutes les tentatives utiles ont échoué, ou dès la
-            première erreur 4xx définitive.
+            première erreur 4xx définitive, ou si ``check_fn`` rejette la
+            réponse.
     """
     sleep_fn = sleep or _sleep
     start = _monotonic()
@@ -356,6 +362,12 @@ def post_with_retry(
             logger.warning(
                 "event=api_cost_unavailable step=%s provider=%s", meta.step, meta.provider
             )
+    if response is not None and check_fn is not None:
+        try:
+            check_fn(response)
+        except Exception as err:  # noqa: BLE001 - toute réponse illisible est un échec
+            error = f"Réponse invalide : {type(err).__name__}: {err}"
+            response = None
 
     record_call(
         meta,
