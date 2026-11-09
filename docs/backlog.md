@@ -9,7 +9,7 @@ d'être recopié en issues GitHub (labels : `must`, `should`, `could`, `infra`,
 | 1 | Squelette Django, settings par env, Docker, compose, CI | infra, must | `feat/1-squelette-django` | fait |
 | 2 | Authentification et espace utilisateur | must | `feat/2-authentification` | fait |
 | 3 | Modèles Dream / ConsentRecord / ApiCall + admin | must | `feat/3-modeles` | fait |
-| 4 | `post_with_retry` unique + ApiCall + tests | must | | à faire |
+| 4 | `post_with_retry` unique + ApiCall + tests | must | `feat/4-post-with-retry` | fait |
 | 5 | Transcription Voxtral + mock | must | | à faire |
 | 6 | Analyse émotionnelle + prompt d'image (Mistral → Scaleway → mock) | must | | à faire |
 | 7 | Génération d'image BFL + remplacement local | must | | à faire |

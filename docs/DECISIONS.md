@@ -130,3 +130,46 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   `ruff check --fix && ruff format` après chaque `makemigrations`.
 - **Écarté** : ajouter `*/migrations/*` à `exclude` (modifie la configuration
   imposée).
+
+## D13. `post_with_retry` : métadonnées regroupées et coût calculé à la source
+
+- **Contexte** : la signature cadrée est `post_with_retry(url, headers, *, json,
+  data, files, timeout)`, mais la fonction doit aussi écrire une ligne `ApiCall`
+  (étape, fournisseur, modèle, rêve, coût) et une ligne de log contenant le coût.
+- **Décision** : deux paramètres nommés en plus : `meta: CallMeta` (dataclass
+  étape/fournisseur/modèle/source/rêve/utilisateur) et `cost_fn` (calcule le
+  coût depuis la réponse : tokens `usage`, durée audio…). L'appel est ainsi
+  tracé **une seule fois**, coût compris. `latency_ms` mesure la durée totale
+  vue par l'utilisateur, attentes entre tentatives comprises. Les en-têtes
+  (qui contiennent la clé) ne sont jamais journalisés.
+- **Écarté** : renvoyer l'`ApiCall` à l'appelant pour qu'il complète le coût
+  (deux écritures, et une ligne de log sans coût) ; une dizaine de paramètres
+  à plat.
+
+## D14. Bornes de temps : `Retry-After` plafonné, budget total de 100 s
+
+- **Contexte** : tout se fait en synchrone dans une requête Gunicorn (timeout
+  120 s). Un `Retry-After: 60` respecté à la lettre, ou trois timeouts de 30 s,
+  feraient tomber la requête au lieu de basculer en mode dégradé.
+- **Décision** : `Retry-After` est respecté jusqu'à 10 s ; au-delà, abandon
+  immédiat (le service a dit qu'il ne serait pas prêt à temps). Avant chaque
+  nouvelle tentative, on vérifie que `écoulé + délai + timeout ≤ max_total_s`
+  (100 s par défaut). Les services choisiront leurs timeouts en conséquence.
+- **Écarté** : attendre aveuglément (risque de 502/timeout Gunicorn) ; une
+  file de tâches asynchrone (exclue par le cadrage : pas de Celery).
+
+## D15. Tests : sommeil, hasard et réseau neutralisés pour toute la suite
+
+- **Contexte** : NAVI attendait réellement 4 s par test de retry, et un test
+  mal écrit aurait pu appeler (et payer) une vraie API.
+- **Décision** : `http.py` expose trois points d'injection (`_sleep`,
+  `_jitter`, `_build_client`). Deux fixtures *autouse* les remplacent pour
+  **tous** les tests : les délais sont enregistrés au lieu d'être attendus, le
+  jitter vaut 0, et le client HTTP est branché sur un faux serveur
+  (`httpx.MockTransport`) qui fait échouer le test sur toute requête non
+  prévue. Le faux serveur peut répondre par hôte (« Mistral 500 puis
+  Scaleway 200 »).
+- **Écarté** : `unittest.mock.patch("httpx.Client.post")` comme dans NAVI ;
+  il contourne la construction réelle de la requête (multipart, en-têtes) et
+  ne protège pas des oublis. La bibliothèque `respx` : une dépendance de plus
+  pour ce que `MockTransport` fait déjà.
