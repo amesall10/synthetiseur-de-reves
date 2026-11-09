@@ -1,0 +1,41 @@
+# Environnement local complet : application Django + PostgreSQL.
+# Lancement : docker compose up --build  ->  http://localhost:8000
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: reves
+      POSTGRES_USER: reves
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reves-dev}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reves -d reves"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  web:
+    build: .
+    # Clés d'API facultatives : sans .env, tout fonctionne en mode simulé.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Prioritaires sur .env (qui peut viser SQLite pour l'usage en venv).
+      DATABASE_URL: postgres://reves:${POSTGRES_PASSWORD:-reves-dev}@db:5432/reves
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-compose-key-ne-pas-utiliser-en-prod}
+      DJANGO_DEBUG: "False"
+      # HTTP simple en local : cookies non marqués « Secure ».
+      DJANGO_SECURE_COOKIES: "False"
+      ALLOWED_HOSTS: localhost,127.0.0.1
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
