@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import wave
 from collections.abc import Callable
 from typing import Any
 
@@ -20,6 +22,25 @@ PASSWORD = "Mot-de-passe-de-test-42"
 
 # Quelques octets suffisent : aucun test n'envoie l'audio à une vraie API.
 FAKE_AUDIO = b"RIFF\x00\x00\x00\x00WAVEfmt "
+
+
+def make_wav(seconds: float, rate: int = 8000) -> bytes:
+    """Fabrique un vrai fichier WAV PCM silencieux.
+
+    Args:
+        seconds: Durée voulue.
+        rate: Fréquence d'échantillonnage.
+
+    Returns:
+        Les octets du fichier.
+    """
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(rate)
+        wav.writeframes(b"\x00\x00" * int(seconds * rate))
+    return buffer.getvalue()
 
 
 @pytest.fixture()

@@ -10,6 +10,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Police avec accents pour l'image de remplacement (celle de Pillow n'en a pas).
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends fonts-dejavu-core \
+  && rm -rf /var/lib/apt/lists/*
+
 # Dépendances d'exécution uniquement (pas de pytest ni de ruff dans l'image).
 COPY requirements.txt .
 RUN pip install -r requirements.txt

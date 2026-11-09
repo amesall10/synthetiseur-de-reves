@@ -14,7 +14,7 @@ Ce fichier en garde une copie lisible hors ligne. Labels : `must`, `should`,
 | [#5](https://github.com/amesall10/synthetiseur-de-reves/issues/5) | Transcription Voxtral + mock | must | `feat/5-transcription-voxtral` | fait |
 | [#6](https://github.com/amesall10/synthetiseur-de-reves/issues/6) | Analyse émotionnelle + prompt d'image (Mistral → Scaleway → mock) | must | `feat/6-analyse-emotion` | fait |
 | [#7](https://github.com/amesall10/synthetiseur-de-reves/issues/7) | Génération d'image BFL + remplacement local | must | `feat/7-generation-image` | fait |
-| [#8](https://github.com/amesall10/synthetiseur-de-reves/issues/8) | Enregistrement audio + parcours de traitement idempotent | must | | à faire |
+| [#8](https://github.com/amesall10/synthetiseur-de-reves/issues/8) | Enregistrement audio + parcours de traitement idempotent | must | `feat/8-parcours-traitement` | fait |
 | [#9](https://github.com/amesall10/synthetiseur-de-reves/issues/9) | Historique avec filtres date/émotion | must | | à faire |
 | [#10](https://github.com/amesall10/synthetiseur-de-reves/issues/10) | Dashboard statistiques | must | | à faire |
 | [#11](https://github.com/amesall10/synthetiseur-de-reves/issues/11) | Plafond de budget | should | | à faire |

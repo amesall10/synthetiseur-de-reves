@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Nouveau rêve · Synthétiseur de rêves{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl">
+  <h1 class="text-2xl font-semibold">Nouveau rêve</h1>
+  <p class="mt-2 text-sm text-slate-400">
+    Racontez votre rêve à voix haute ({% widthratio max_seconds 60 1 %} minutes au plus),
+    ou importez un fichier audio.
+  </p>
+
+  <form method="post" enctype="multipart/form-data" class="mt-8 space-y-8" id="dream-form">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="rounded-md border border-red-800 bg-red-950 px-4 py-2 text-sm text-red-200">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    {# 1. Consentement explicite : un récit de rêve peut contenir des données sensibles (art. 9 RGPD). #}
+    <section class="rounded-lg border border-slate-800 p-5">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">1. Consentement</h2>
+      <label for="{{ form.consent.id_for_label }}" class="mt-3 flex items-start gap-3 text-sm">
+        <input type="checkbox" name="{{ form.consent.html_name }}" id="{{ form.consent.id_for_label }}"
+               class="mt-1 h-4 w-4 shrink-0" {% if form.consent.value %}checked{% endif %} required>
+        <span>{{ form.consent.label }}</span>
+      </label>
+      {{ form.consent.errors }}
+    </section>
+
+    {# 2. Enregistrement au micro (WebM/Opus) ou import d'un fichier. #}
+    <section class="rounded-lg border border-slate-800 p-5" id="recorder" data-max-seconds="{{ max_seconds }}">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">2. Votre récit</h2>
+
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button" id="record-start" class="rounded-md bg-rose-600 px-4 py-2 font-medium hover:bg-rose-500 disabled:opacity-40">● Enregistrer</button>
+        <button type="button" id="record-stop" class="rounded-md border border-slate-600 px-4 py-2 disabled:opacity-40" disabled>■ Arrêter</button>
+        <span id="record-timer" class="font-mono text-sm text-slate-300">00:00</span>
+      </div>
+      <p id="record-status" class="mt-2 text-sm text-slate-400" aria-live="polite"></p>
+
+      <div class="mt-6">
+        <label for="{{ form.audio.id_for_label }}" class="text-sm font-medium">Ou importer un fichier (WAV, MP3 ou WebM, 10 Mo au plus)</label>
+        <input type="file" name="{{ form.audio.html_name }}" id="{{ form.audio.id_for_label }}"
+               accept="audio/wav,audio/x-wav,audio/mpeg,audio/webm,audio/ogg,.wav,.mp3,.webm,.ogg"
+               class="mt-2 block w-full text-sm text-slate-300 file:mr-4 file:rounded-md file:border-0 file:bg-slate-700 file:px-4 file:py-2 file:text-slate-100">
+        {{ form.audio.errors }}
+      </div>
+
+      <audio id="record-preview" controls class="mt-4 hidden w-full"></audio>
+    </section>
+
+    <button type="submit" class="w-full rounded-md bg-indigo-600 px-4 py-3 font-medium hover:bg-indigo-500">Analyser mon rêve</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/recorder.js' %}" defer></script>
+{% endblock %}

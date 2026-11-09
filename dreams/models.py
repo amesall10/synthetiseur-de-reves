@@ -107,6 +107,9 @@ class Dream(models.Model):
     image_source = models.CharField(max_length=16, choices=Source.choices, blank=True)
     cost_usd = models.DecimalField(max_digits=10, decimal_places=6, default=Decimal("0"))
     failure_reason = models.CharField(max_length=255, blank=True)
+    # Verrou d'étape : posé par une mise à jour conditionnelle avant tout appel
+    # payant, pour qu'un double clic ou un second onglet ne paie pas deux fois.
+    step_started_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         """Options du modèle."""
