@@ -1,0 +1,6 @@
+# Dépendances de développement et de test (jamais installées dans l'image Docker).
+-r requirements.txt
+pytest==9.2.0
+pytest-cov==7.1.0
+pytest-django==4.14.0
+ruff==0.17.4

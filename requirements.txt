@@ -1,0 +1,9 @@
+# Dépendances d'exécution (image Docker de production).
+Django==5.2.19
+django-environ==0.14.0
+gunicorn==26.2.0
+httpx==0.28.1
+pillow==13.0.0
+psycopg[binary]==3.3.8
+sentry-sdk==2.74.0
+whitenoise==6.12.0
