@@ -3,8 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # Toutes les PR, y compris les PR empilées qui visent une branche feat/*.
   pull_request:
-    branches: [main]
+  # Lancement manuel depuis l'onglet Actions (si les webhooks sont en panne).
+  workflow_dispatch:
 
 permissions:
   contents: read
