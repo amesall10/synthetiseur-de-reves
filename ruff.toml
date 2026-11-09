@@ -1,5 +1,7 @@
 line-length = 100
 exclude = [".venv", "__pycache__"]
+# Migrations generees par Django : code genere, ni lint ni formatage (cf. D16).
+extend-exclude = ["*/migrations/*"]
 
 [lint]
 select = ["E", "F", "W", "I"]
