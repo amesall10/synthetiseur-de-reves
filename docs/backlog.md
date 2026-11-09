@@ -11,7 +11,7 @@ Ce fichier en garde une copie lisible hors ligne. Labels : `must`, `should`,
 | [#2](https://github.com/amesall10/synthetiseur-de-reves/issues/2) | Authentification et espace utilisateur | must | `feat/2-authentification` | fait |
 | [#3](https://github.com/amesall10/synthetiseur-de-reves/issues/3) | Modèles Dream / ConsentRecord / ApiCall + admin | must | `feat/3-modeles` | fait |
 | [#4](https://github.com/amesall10/synthetiseur-de-reves/issues/4) | `post_with_retry` unique + ApiCall + tests | must | `feat/4-post-with-retry` | fait |
-| [#5](https://github.com/amesall10/synthetiseur-de-reves/issues/5) | Transcription Voxtral + mock | must | | à faire |
+| [#5](https://github.com/amesall10/synthetiseur-de-reves/issues/5) | Transcription Voxtral + mock | must | `feat/5-transcription-voxtral` | fait |
 | [#6](https://github.com/amesall10/synthetiseur-de-reves/issues/6) | Analyse émotionnelle + prompt d'image (Mistral → Scaleway → mock) | must | | à faire |
 | [#7](https://github.com/amesall10/synthetiseur-de-reves/issues/7) | Génération d'image BFL + remplacement local | must | | à faire |
 | [#8](https://github.com/amesall10/synthetiseur-de-reves/issues/8) | Enregistrement audio + parcours de traitement idempotent | must | | à faire |

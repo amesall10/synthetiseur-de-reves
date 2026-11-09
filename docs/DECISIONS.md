@@ -189,3 +189,42 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   à la main. Le reste de la configuration NAVI est inchangé.
 - **Écarté** : `ruff check --fix && ruff format` après chaque migration (D12) ;
   facile à oublier, et l'oubli n'apparaît qu'en CI.
+
+## D17. Voxtral : segments sans diarisation, `language=fr` avec repli
+
+- **Contexte** : il faut les segments horodatés pour calculer la durée. La doc
+  Mistral actuelle (*transcribe-files*, lue le 2026-11-09) montre
+  `timestamp_granularities=segment` **sans** `diarize` (c'est `diarize` qui
+  exige les segments, pas l'inverse). En revanche, une page plus ancienne
+  (*offline transcription*, dépréciée) dit que `timestamp_granularities`
+  « n'est pas compatible avec `language` » ; la doc actuelle ne le dit plus,
+  sans le démentir non plus. **Non vérifié en conditions réelles.**
+- **Décision** : envoyer `model`, `timestamp_granularities=segment` et
+  `language=fr`. Si l'API répond 400 ou 422, relancer une fois sans
+  `language` (détection automatique), plutôt que de perdre la transcription.
+  Les deux appels sont tracés dans `ApiCall`. Le modèle reste
+  `voxtral-mini-latest` (cadrage) mais devient un réglage
+  (`MISTRAL_STT_MODEL`) : la doc recommande désormais
+  `voxtral-mini-transcribe-3` sans dire si l'alias pointe dessus.
+- **Écarté** : abandonner `language` d'emblée (perte de précision si la
+  combinaison est en fait acceptée) ; abandonner les segments (plus de durée
+  serveur, donc retour de la faille NAVI).
+- **À vérifier** avec une vraie clé : un appel de test tranchera, et le log
+  `event=stt_retry_without_language` le signalera s'il se produit.
+
+## D18. Durée et coût de la transcription calculés côté serveur
+
+- **Contexte** : NAVI calculait le coût à partir d'une durée envoyée par le
+  navigateur, donc falsifiable.
+- **Décision** : `audio_duration_s` = fin du dernier segment renvoyé par
+  Voxtral ; le coût utilise `usage.prompt_audio_seconds` (durée réellement
+  facturée selon la doc), à défaut cette même fin de segment. Tarif :
+  0,0035 $/min (Voxtral Mini Transcribe 3, docs.mistral.ai, 2026-11-09),
+  réglable par `VOXTRAL_COST_PER_MINUTE_USD` car le tarif de l'alias
+  `voxtral-mini-latest` n'est pas affiché séparément. Une réponse sans parole
+  reste un résultat **réel** vide (le pipeline le signalera) : le mock ne
+  sert qu'en cas de panne, jamais pour inventer un récit à la place d'un
+  silence.
+- **Écarté** : estimer la durée à partir de la taille du fichier (dépend du
+  codec) ; décoder l'audio côté serveur (ffmpeg dans l'image : +100 Mo).
+
