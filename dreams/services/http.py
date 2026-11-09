@@ -1,10 +1,13 @@
-"""Unique fonction d'appel HTTP aux API d'IA, avec retry et traçabilité.
+"""Appels HTTP aux API d'IA : une seule politique de retry, et leur traçabilité.
 
 Portée depuis ``navi-reference/ai-service/clients/mistral_cr.py``
 (``_post_with_retry``), que NAVI avait dupliquée dans quatre clients. Ici,
 tous les services (transcription, analyse, image) passent par
 ``post_with_retry`` : même politique de retry, et chaque appel laisse une
 ligne ``ApiCall`` (base des métriques et du budget) et une ligne de log.
+La boucle de retry elle-même vit dans ``request_with_retry`` (toute méthode,
+sans trace), que réutilise le fournisseur d'images pour ses GET
+d'interrogation (D22).
 
 Politique :
     - 3 tentatives au plus, délais de 1 s puis 3 s, plus un jitter aléatoire
@@ -252,6 +255,127 @@ def record_call(
     )
 
 
+@dataclass
+class RetryOutcome:
+    """Résultat brut d'une requête avec retry (sans trace ``ApiCall``).
+
+    Attributes:
+        response: Réponse réussie (code < 400), ``None`` en cas d'échec.
+        status_code: Dernier code HTTP reçu, ``None`` après une erreur réseau.
+        attempts: Nombre de tentatives effectuées.
+        error: Message d'erreur court, vide en cas de succès.
+        elapsed_ms: Durée totale, attentes entre tentatives comprises.
+    """
+
+    response: httpx.Response | None
+    status_code: int | None
+    attempts: int
+    error: str
+    elapsed_ms: int
+
+    @property
+    def ok(self) -> bool:
+        """Indique si la requête a abouti.
+
+        Returns:
+            ``True`` si une réponse réussie est disponible.
+        """
+        return self.response is not None
+
+
+def request_with_retry(
+    method: str,
+    url: str,
+    headers: Mapping[str, str],
+    *,
+    meta: CallMeta,
+    json: Any = None,
+    data: Mapping[str, Any] | None = None,
+    files: Mapping[str, Any] | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    max_total_s: float = DEFAULT_MAX_TOTAL_SECONDS,
+    sleep: Callable[[float], None] | None = None,
+) -> RetryOutcome:
+    """Cœur unique de la politique de retry, pour toute méthode HTTP.
+
+    Ne lève pas d'exception réseau et n'écrit pas d'``ApiCall`` : c'est le
+    rôle de ``post_with_retry``, ou de l'appelant quand une opération
+    logique enchaîne plusieurs requêtes (soumission puis interrogation chez
+    BFL) et ne doit laisser qu'une seule trace.
+
+    Args:
+        method: Méthode HTTP (``POST``, ``GET``).
+        url: Adresse appelée.
+        headers: En-têtes HTTP (jamais journalisés).
+        meta: Contexte de l'appel, pour les logs de retry.
+        json: Corps JSON, le cas échéant.
+        data: Champs de formulaire, le cas échéant.
+        files: Fichiers à téléverser, le cas échéant.
+        timeout: Délai maximal d'une tentative, en secondes.
+        max_total_s: Durée totale à ne pas dépasser, attentes comprises.
+        sleep: Fonction d'attente ; par défaut ``time.sleep`` (via ``_sleep``).
+
+    Returns:
+        Le résultat, réussi ou non.
+    """
+    sleep_fn = sleep or _sleep
+    start = _monotonic()
+    attempts = 0
+    status_code: int | None = None
+    error = ""
+    response: httpx.Response | None = None
+
+    with _build_client(timeout) as client:
+        for attempt_index in range(len(RETRY_DELAYS_SECONDS) + 1):
+            attempts += 1
+            retry_after: float | None = None
+            try:
+                result = client.request(
+                    method, url, headers=dict(headers), json=json, data=data, files=files
+                )
+            except httpx.TransportError as err:  # inclut les timeouts
+                status_code = None
+                error = f"{type(err).__name__}: {err}"
+            else:
+                status_code = result.status_code
+                if status_code < 400:
+                    response, error = result, ""
+                    break
+                error = f"HTTP {status_code}: {_body_snippet(result)}"
+                if not _is_transient(status_code):
+                    break
+                retry_after = parse_retry_after(result.headers.get("Retry-After"))
+
+            if attempt_index >= len(RETRY_DELAYS_SECONDS):
+                break
+            delay = RETRY_DELAYS_SECONDS[attempt_index] + _jitter()
+            if retry_after is not None:
+                if retry_after > MAX_RETRY_AFTER_SECONDS:
+                    error += f" (Retry-After {retry_after:.0f} s, abandon)"
+                    break
+                delay = max(delay, retry_after)
+            if _monotonic() - start + delay + timeout > max_total_s:
+                error += " (budget de temps épuisé)"
+                break
+            logger.warning(
+                "event=api_retry step=%s provider=%s attempt=%d status=%s delay_s=%.2f",
+                meta.step,
+                meta.provider,
+                attempts,
+                status_code if status_code is not None else "-",
+                delay,
+            )
+            sleep_fn(delay)
+
+    return RetryOutcome(
+        response=response,
+        status_code=status_code,
+        attempts=attempts,
+        error=error,
+        elapsed_ms=int((_monotonic() - start) * 1000),
+    )
+
+
 def post_with_retry(
     url: str,
     headers: Mapping[str, str],
@@ -302,58 +426,23 @@ def post_with_retry(
         La réponse HTTP réussie (code < 400).
 
     Raises:
-        ApiCallError: Si toutes les tentatives utiles ont échoué, ou dès la
+        ApiCallError: Si toutes les tentatives utiles ont échoué, dès la
             première erreur 4xx définitive, ou si ``check_fn`` rejette la
             réponse.
     """
-    sleep_fn = sleep or _sleep
-    start = _monotonic()
-    attempts = 0
-    status_code: int | None = None
-    error = ""
-    response: httpx.Response | None = None
-
-    with _build_client(timeout) as client:
-        for attempt_index in range(len(RETRY_DELAYS_SECONDS) + 1):
-            attempts += 1
-            retry_after: float | None = None
-            try:
-                result = client.post(url, headers=dict(headers), json=json, data=data, files=files)
-            except httpx.TransportError as err:  # inclut les timeouts
-                status_code = None
-                error = f"{type(err).__name__}: {err}"
-            else:
-                status_code = result.status_code
-                if status_code < 400:
-                    response, error = result, ""
-                    break
-                error = f"HTTP {status_code}: {_body_snippet(result)}"
-                if not _is_transient(status_code):
-                    break
-                retry_after = parse_retry_after(result.headers.get("Retry-After"))
-
-            if attempt_index >= len(RETRY_DELAYS_SECONDS):
-                break
-            delay = RETRY_DELAYS_SECONDS[attempt_index] + _jitter()
-            if retry_after is not None:
-                if retry_after > MAX_RETRY_AFTER_SECONDS:
-                    error += f" (Retry-After {retry_after:.0f} s, abandon)"
-                    break
-                delay = max(delay, retry_after)
-            if _monotonic() - start + delay + timeout > max_total_s:
-                error += " (budget de temps épuisé)"
-                break
-            logger.warning(
-                "event=api_retry step=%s provider=%s attempt=%d status=%s delay_s=%.2f",
-                meta.step,
-                meta.provider,
-                attempts,
-                status_code if status_code is not None else "-",
-                delay,
-            )
-            sleep_fn(delay)
-
-    latency_ms = int((_monotonic() - start) * 1000)
+    outcome = request_with_retry(
+        "POST",
+        url,
+        headers,
+        meta=meta,
+        json=json,
+        data=data,
+        files=files,
+        timeout=timeout,
+        max_total_s=max_total_s,
+        sleep=sleep,
+    )
+    response, error = outcome.response, outcome.error
     cost = Decimal("0")
     if response is not None and cost_fn is not None:
         try:
@@ -371,13 +460,13 @@ def post_with_retry(
 
     record_call(
         meta,
-        status_code=status_code,
-        latency_ms=latency_ms,
-        attempts=attempts,
+        status_code=outcome.status_code,
+        latency_ms=outcome.elapsed_ms,
+        attempts=outcome.attempts,
         cost=cost,
         error=error,
     )
 
     if response is None:
-        raise ApiCallError(error, status_code=status_code, attempts=attempts)
+        raise ApiCallError(error, status_code=outcome.status_code, attempts=outcome.attempts)
     return response

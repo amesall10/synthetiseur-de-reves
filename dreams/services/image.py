@@ -1,0 +1,386 @@
+"""Génération de l'image d'un rêve, avec fournisseur interchangeable.
+
+Interface unique : ``generate_image(prompt) -> (octets, type MIME, source)``.
+Le fournisseur est choisi par le réglage ``IMAGE_PROVIDER`` :
+
+- ``mock`` (défaut) : image de remplacement générée localement avec Pillow
+  (dégradé de couleurs selon l'émotion + titre). C'est aussi le mode dégradé
+  quand le fournisseur réel échoue : un rêve a toujours une image ;
+- ``bfl`` : API Black Forest Labs (FLUX), endpoint UE. L'API est
+  asynchrone : soumission, interrogation de ``polling_url`` jusqu'à
+  ``Ready``, puis téléchargement de l'URL signée (valable 10 minutes).
+
+Ajouter un fournisseur (après le benchmark) = écrire une classe qui respecte
+``ImageProvider`` et l'inscrire dans ``PROVIDERS``.
+"""
+
+from __future__ import annotations
+
+import io
+import logging
+import textwrap
+from collections.abc import Callable
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Any, Protocol
+
+import httpx
+from django.conf import settings
+from PIL import Image, ImageDraw, ImageFont
+
+from dreams.models import Dream, Emotion, Source, Step
+from dreams.services import costs
+from dreams.services import http as http_service
+from dreams.services.http import CallMeta, record_call, request_with_retry
+
+logger = logging.getLogger(__name__)
+
+IMAGE_SIZE = 1024
+PLACEHOLDER_SIZE = 768
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
+ALLOWED_MIMES = ("image/jpeg", "image/png")
+USD_PER_CREDIT = Decimal("0.01")
+
+
+@dataclass(frozen=True)
+class GeneratedImage:
+    """Image produite par un fournisseur.
+
+    Attributes:
+        data: Octets de l'image.
+        mime: Type MIME (``image/jpeg`` ou ``image/png``).
+    """
+
+    data: bytes
+    mime: str
+
+
+class ImageGenerationError(RuntimeError):
+    """La génération a échoué ; le mode dégradé prend le relais."""
+
+
+class ImageProvider(Protocol):
+    """Contrat d'un fournisseur d'images."""
+
+    name: str
+
+    def is_configured(self) -> bool:
+        """Indique si le fournisseur peut être appelé (clé présente…).
+
+        Returns:
+            ``True`` si le fournisseur est utilisable.
+        """
+
+    def generate(self, prompt: str, *, dream: Dream | None) -> GeneratedImage:
+        """Génère une image à partir d'un prompt.
+
+        Args:
+            prompt: Prompt en anglais.
+            dream: Rêve concerné, pour la traçabilité.
+
+        Returns:
+            L'image générée.
+        """
+
+
+# ---------------------------------------------------------------------------
+# Black Forest Labs (FLUX)
+# ---------------------------------------------------------------------------
+
+
+def _require_bfl_url(url: Any) -> str:
+    """Vérifie qu'une URL renvoyée par BFL pointe bien chez BFL, en HTTPS.
+
+    La clé d'API est envoyée à ``polling_url`` : une URL inattendue
+    (réponse corrompue ou falsifiée) ne doit jamais la recevoir.
+
+    Args:
+        url: URL lue dans une réponse de BFL.
+
+    Returns:
+        L'URL, si elle est acceptable.
+
+    Raises:
+        ImageGenerationError: Si l'URL est absente, non HTTPS ou hors ``bfl.ai``.
+    """
+    if not isinstance(url, str) or not url:
+        raise ImageGenerationError("URL absente dans la réponse BFL")
+    parsed = httpx.URL(url)
+    host = parsed.host or ""
+    if parsed.scheme != "https" or not (host == "bfl.ai" or host.endswith(".bfl.ai")):
+        raise ImageGenerationError(f"URL refusée (hors bfl.ai) : {parsed.scheme}://{host}")
+    return url
+
+
+class BflTaskFailed(ImageGenerationError):
+    """BFL a terminé la tâche sans image (modération, erreur) : rien n'est facturé."""
+
+
+class BflProvider:
+    """Fournisseur Black Forest Labs, modèle FLUX le moins cher à ~1024 px.
+
+    Une génération = une seule ligne ``ApiCall`` : soumission, interrogations
+    et téléchargement sont regroupés, et la latence mesure l'attente réelle.
+    """
+
+    name = "bfl"
+    PENDING_STATUSES = frozenset({"Pending", "Reasoning", "Generating"})
+    POLL_INTERVAL_SECONDS = 1.0
+    # 60 interrogations à 1 s : la génération doit aboutir en une minute.
+    MAX_POLLS = 60
+    SUBMIT_TIMEOUT_SECONDS = 20.0
+    POLL_TIMEOUT_SECONDS = 10.0
+    DOWNLOAD_TIMEOUT_SECONDS = 20.0
+
+    def is_configured(self) -> bool:
+        """Indique si la clé BFL est présente.
+
+        Returns:
+            ``True`` si ``BFL_API_KEY`` est renseignée.
+        """
+        return bool(settings.BFL_API_KEY)
+
+    def _headers(self) -> dict[str, str]:
+        """En-têtes authentifiés (clé dans ``x-key``).
+
+        Returns:
+            Les en-têtes.
+        """
+        return {"x-key": settings.BFL_API_KEY, "accept": "application/json"}
+
+    def _poll(self, polling_url: str, meta: CallMeta) -> str:
+        """Interroge la tâche jusqu'à obtenir l'URL de l'image.
+
+        Args:
+            polling_url: URL renvoyée à la soumission.
+            meta: Contexte de l'appel.
+
+        Returns:
+            L'URL signée de l'image.
+
+        Raises:
+            BflTaskFailed: Si la tâche se termine sans image (non facturée).
+            ImageGenerationError: Si l'interrogation échoue ou dure trop.
+        """
+        for _ in range(self.MAX_POLLS):
+            http_service._sleep(self.POLL_INTERVAL_SECONDS)
+            outcome = request_with_retry(
+                "GET",
+                polling_url,
+                self._headers(),
+                meta=meta,
+                timeout=self.POLL_TIMEOUT_SECONDS,
+                max_total_s=30.0,
+            )
+            if not outcome.ok:
+                raise ImageGenerationError(f"interrogation : {outcome.error}")
+            body = outcome.response.json()
+            status = body.get("status")
+            if status == "Ready":
+                return _require_bfl_url((body.get("result") or {}).get("sample"))
+            if status not in self.PENDING_STATUSES:
+                raise BflTaskFailed(f"tâche terminée sans image : {status}")
+        raise ImageGenerationError(f"pas d'image après {self.MAX_POLLS} interrogations")
+
+    def _download(self, sample_url: str, meta: CallMeta) -> GeneratedImage:
+        """Télécharge l'image depuis l'URL signée (sans clé d'API).
+
+        Args:
+            sample_url: URL signée renvoyée par BFL.
+            meta: Contexte de l'appel.
+
+        Returns:
+            L'image téléchargée.
+
+        Raises:
+            ImageGenerationError: Si le téléchargement échoue ou si le contenu
+                n'est pas une image JPEG/PNG de taille raisonnable.
+        """
+        outcome = request_with_retry(
+            "GET", sample_url, {}, meta=meta, timeout=self.DOWNLOAD_TIMEOUT_SECONDS
+        )
+        if not outcome.ok:
+            raise ImageGenerationError(f"téléchargement : {outcome.error}")
+        mime = outcome.response.headers.get("content-type", "").split(";")[0].strip().lower()
+        if mime not in ALLOWED_MIMES:
+            raise ImageGenerationError(f"type de contenu inattendu : {mime or 'absent'}")
+        data = outcome.response.content
+        if not data or len(data) > MAX_IMAGE_BYTES:
+            raise ImageGenerationError(f"taille d'image inattendue : {len(data)} octets")
+        return GeneratedImage(data=data, mime=mime)
+
+    def generate(self, prompt: str, *, dream: Dream | None) -> GeneratedImage:
+        """Soumet le prompt, attend le résultat et télécharge l'image.
+
+        Args:
+            prompt: Prompt en anglais.
+            dream: Rêve concerné.
+
+        Returns:
+            L'image générée.
+
+        Raises:
+            ImageGenerationError: En cas d'échec, après traçage dans ``ApiCall``.
+        """
+        model = settings.BFL_MODEL
+        meta = CallMeta(step=Step.IMAGE, provider=self.name, model=model, dream=dream)
+        start = http_service._monotonic()
+        status_code: int | None = None
+        attempts = 0
+        cost = Decimal("0")
+        error = ""
+        try:
+            submit = request_with_retry(
+                "POST",
+                f"{settings.BFL_API_BASE.rstrip('/')}/v1/{model}",
+                self._headers(),
+                meta=meta,
+                json={
+                    "prompt": prompt,
+                    "width": IMAGE_SIZE,
+                    "height": IMAGE_SIZE,
+                    "output_format": "jpeg",
+                },
+                timeout=self.SUBMIT_TIMEOUT_SECONDS,
+                max_total_s=40.0,
+            )
+            status_code, attempts = submit.status_code, submit.attempts
+            if not submit.ok:
+                raise ImageGenerationError(f"soumission : {submit.error}")
+            body = submit.response.json()
+            polling_url = _require_bfl_url(body.get("polling_url"))
+            # Coût annoncé par BFL (crédits à 0,01 $), sinon tarif configuré.
+            credits = body.get("cost")
+            if isinstance(credits, int | float) and not isinstance(credits, bool):
+                cost = (Decimal(str(credits)) * USD_PER_CREDIT).quantize(costs.QUANT)
+            else:
+                cost = costs.to_decimal(settings.BFL_COST_PER_IMAGE_USD)
+            image = self._download(self._poll(polling_url, meta), meta)
+        except BflTaskFailed as err:
+            cost = Decimal("0")  # « Rejected requests, failed generations… are not charged. »
+            error = str(err)
+            raise
+        except Exception as err:
+            error = str(err) or type(err).__name__
+            raise ImageGenerationError(error) from err
+        finally:
+            record_call(
+                meta,
+                status_code=status_code,
+                latency_ms=int((http_service._monotonic() - start) * 1000),
+                attempts=attempts,
+                cost=cost,
+                error=error,
+            )
+        return image
+
+
+PROVIDERS: dict[str, Callable[[], ImageProvider]] = {"bfl": BflProvider}
+
+
+# ---------------------------------------------------------------------------
+# Image de remplacement (mode simulé et mode dégradé)
+# ---------------------------------------------------------------------------
+
+# Couleur du haut, couleur du bas.
+EMOTION_COLORS: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
+    Emotion.HEUREUX: ((255, 202, 40), (239, 108, 0)),
+    Emotion.PAISIBLE: ((129, 212, 250), (149, 117, 205)),
+    Emotion.NEUTRE: ((144, 164, 174), (55, 71, 79)),
+    Emotion.TRISTE: ((92, 107, 192), (26, 35, 126)),
+    Emotion.STRESSANT: ((255, 138, 101), (93, 64, 55)),
+    Emotion.EFFRAYANT: ((106, 27, 154), (10, 10, 10)),
+}
+
+
+def _font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
+    """Police par défaut de Pillow, à la taille demandée si possible.
+
+    Args:
+        size: Taille en pixels.
+
+    Returns:
+        La police (bitmap de taille fixe si FreeType est indisponible).
+    """
+    try:
+        return ImageFont.load_default(size=size)
+    except (TypeError, ImportError, OSError):  # pragma: no cover - Pillow sans FreeType
+        return ImageFont.load_default()
+
+
+def placeholder_image(emotion: str, title: str = "") -> bytes:
+    """Dessine l'image de remplacement : dégradé selon l'émotion + titre.
+
+    Args:
+        emotion: Émotion du rêve (couleurs).
+        title: Titre affiché (début du résumé) ; à défaut, le nom de l'émotion.
+
+    Returns:
+        Les octets d'une image PNG carrée.
+    """
+    top, bottom = EMOTION_COLORS.get(emotion, EMOTION_COLORS[Emotion.NEUTRE])
+    size = (PLACEHOLDER_SIZE, PLACEHOLDER_SIZE)
+    mask = Image.linear_gradient("L").resize(size)
+    image = Image.composite(Image.new("RGB", size, bottom), Image.new("RGB", size, top), mask)
+
+    draw = ImageDraw.Draw(image)
+    label = Emotion(emotion).label if emotion in Emotion.values else Emotion.NEUTRE.label
+    text = textwrap.fill(" ".join((title or label).split())[:120], width=26)
+    font = _font(44)
+    box = draw.multiline_textbbox((0, 0), text, font=font, align="center", spacing=12)
+    x = (size[0] - (box[2] - box[0])) / 2
+    y = (size[1] - (box[3] - box[1])) / 2
+    draw.multiline_text((x + 2, y + 2), text, font=font, fill=(0, 0, 0), align="center", spacing=12)
+    draw.multiline_text((x, y), text, font=font, fill=(255, 255, 255), align="center", spacing=12)
+    draw.text((24, size[1] - 48), "Image simulée", font=_font(24), fill=(255, 255, 255))
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
+def generate_image(
+    prompt: str,
+    *,
+    emotion: str = Emotion.NEUTRE,
+    title: str = "",
+    dream: Dream | None = None,
+) -> tuple[bytes, str, str]:
+    """Génère l'image d'un rêve ; ne lève jamais d'exception.
+
+    Args:
+        prompt: Prompt d'image en anglais (issu de l'analyse).
+        emotion: Émotion du rêve, pour l'image de remplacement.
+        title: Titre de l'image de remplacement.
+        dream: Rêve concerné, pour la traçabilité.
+
+    Returns:
+        Le tuple ``(octets, type MIME, source)`` ; ``source`` vaut ``real``
+        si le fournisseur configuré a répondu, ``mock`` sinon.
+    """
+    name = settings.IMAGE_PROVIDER.strip().lower()
+    if name != "mock":
+        factory = PROVIDERS.get(name)
+        if factory is None:
+            logger.error("event=image_provider_unknown provider=%s", name)
+        else:
+            provider = factory()
+            if not provider.is_configured():
+                logger.warning("event=image_provider_not_configured provider=%s", name)
+            else:
+                try:
+                    image = provider.generate(prompt, dream=dream)
+                    return image.data, image.mime, Source.REAL
+                except Exception as err:  # noqa: BLE001 - filet de sécurité volontaire
+                    logger.error("event=image_fallback provider=%s reason=%r", name, str(err)[:200])
+
+    data = placeholder_image(emotion, title)
+    record_call(
+        CallMeta(step=Step.IMAGE, provider="mock", source=Source.MOCK, dream=dream),
+        status_code=None,
+        latency_ms=0,
+        attempts=0,
+        cost=Decimal("0"),
+        error="",
+    )
+    return data, "image/png", Source.MOCK

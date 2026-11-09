@@ -172,6 +172,12 @@ SCALEWAY_CHAT_MODEL: str = env.str(
     "SCALEWAY_CHAT_MODEL", default="mistral-small-3.2-24b-instruct-2506"
 )
 
+# Image : Black Forest Labs (FLUX), endpoint UE, modèle le moins cher à ~1024 px
+# (FLUX 3 Image Klein, 0,009 $ l'image en 1K d'après bfl.ai/pricing, D23).
+BFL_API_BASE: str = env.str("BFL_API_BASE", default="https://api.eu.bfl.ai")
+BFL_MODEL: str = env.str("BFL_MODEL", default="flux-3-image-klein")
+BFL_COST_PER_IMAGE_USD: float = env.float("BFL_COST_PER_IMAGE_USD", default=0.009)
+
 # Coûts unitaires en USD (relevés sur docs.mistral.ai le 2026-11-09, D18).
 VOXTRAL_COST_PER_MINUTE_USD: float = env.float("VOXTRAL_COST_PER_MINUTE_USD", default=0.0035)
 MISTRAL_INPUT_COST_PER_M_USD: float = env.float("MISTRAL_INPUT_COST_PER_M_USD", default=0.15)
