@@ -127,6 +127,8 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
 
 ## D12. `ruff.toml` repris tel quel, migrations corrigées après génération
 
+> **Remplacée par D16** (migrations exclues de ruff).
+
 - **Contexte** : la configuration ruff de NAVI n'exclut pas les migrations,
   dont les imports générés par Django ne respectent pas l'ordre attendu (I001).
 - **Décision** : garder `ruff.toml` inchangé (consigne) et passer
@@ -176,3 +178,14 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   il contourne la construction réelle de la requête (multipart, en-têtes) et
   ne protège pas des oublis. La bibliothèque `respx` : une dépendance de plus
   pour ce que `MockTransport` fait déjà.
+
+## D16. Migrations exclues de ruff (remplace D12)
+
+- **Contexte** : les migrations générées par `makemigrations` cassaient le tri
+  des imports (règle I001), ce qui faisait échouer `ruff check` et donc la CI.
+- **Décision** : `extend-exclude = ["*/migrations/*"]` dans `ruff.toml` ; ruff
+  ne lint ni ne formate plus les migrations. C'est la pratique standard pour du
+  code généré : il n'est pas relu ligne à ligne et sera régénéré, pas maintenu
+  à la main. Le reste de la configuration NAVI est inchangé.
+- **Écarté** : `ruff check --fix && ruff format` après chaque migration (D12) ;
+  facile à oublier, et l'oubli n'apparaît qu'en CI.
