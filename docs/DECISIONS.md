@@ -269,3 +269,72 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
 - **Écarté** : convertir les euros avec un taux figé (faux dès qu'il bouge) ;
   supprimer le secours (perte de résilience pour un coût quasi nul).
 
+## D21. Amorçage de la CI : PR #18 fusionnée sans CI (exception unique)
+
+- **Contexte** : la PR #18 (ticket 1) apporte le workflow
+  `.github/workflows/ci.yml` lui-même. Tant que `main` ne contenait aucun
+  workflow (seulement `.gitignore`), GitHub n'en enregistrait aucun : l'onglet
+  Actions affichait « Get started with GitHub Actions » et aucune exécution
+  n'était créée, même après fermeture et réouverture de la PR. Un incident
+  GitHub (Actions, Webhooks) en cours le même jour a d'abord brouillé le
+  diagnostic.
+- **Décision** : fusionner #18 sans CI, après validation locale des mêmes
+  étapes (ruff, pytest sur SQLite et PostgreSQL 16, build Docker + test de
+  fumée, `docker compose up` en 200) et des tests manuels ; l'explication est
+  laissée en commentaire sur la PR. C'est la seule exception : la CI s'est
+  déclenchée dès la PR suivante (#20), et toutes les autres ne sont fusionnées
+  qu'avec une CI verte. Le workflow accepte aussi `workflow_dispatch` pour un
+  lancement manuel.
+- **Incident associé** : supprimer la branche de #18 à la fusion a **fermé**
+  la PR empilée #20 (dont c'était la base) au lieu de la recibler. Corrigé en
+  recréant la branche, en rouvrant #20 et en la reciblant sur `main`. Pour les
+  fusions suivantes : recibler la PR enfant sur `main` **avant** de supprimer
+  la branche fusionnée.
+- **Écarté** : un commit direct du workflow sur `main` pour amorcer (interdit
+  par la règle « jamais de commit direct sur `main` ») ; attendre la fin de
+  l'incident GitHub (le problème venait en fait de l'amorçage).
+
+## D22. Une seule boucle de retry pour POST et GET : `request_with_retry`
+
+- **Contexte** : BFL est asynchrone (soumission, puis interrogation par GET,
+  puis téléchargement par GET). `post_with_retry` ne fait que du POST et
+  écrit une ligne `ApiCall` par appel ; recopier sa boucle pour le GET aurait
+  recréé la duplication reprochée à NAVI.
+- **Décision** : la boucle vit dans `request_with_retry(method, …)`, qui
+  renvoie un `RetryOutcome` (réponse, code, tentatives, erreur, durée) sans
+  lever d'exception ni écrire en base. `post_with_retry` garde sa signature
+  et ajoute coût, contrôle (`check_fn`) et trace. BFL utilise
+  `request_with_retry` pour ses trois requêtes et n'écrit **qu'une** ligne
+  `ApiCall` par génération, dont la latence couvre toute l'attente : c'est
+  ce qui compte pour les p50/p95 de l'étape image.
+- **Écarté** : une ligne `ApiCall` par requête (les interrogations
+  gonfleraient les statistiques et fausseraient la latence de l'étape) ;
+  un `get_with_retry` séparé (deuxième copie de la boucle).
+
+## D23. Image : FLUX 3 Image Klein sur l'endpoint UE, URL BFL vérifiées
+
+- **Contexte** : le cadrage demande le modèle FLUX le moins cher à ~1024 px,
+  sur l'endpoint UE. D'après bfl.ai/pricing (lu le 2026-11-09) :
+  FLUX 3 Image Klein 0,009 $ l'image en 1K, contre 0,014 $ pour
+  FLUX.2 [klein] 4B et 0,025 $ pour FLUX.1 [dev].
+- **Décision** : `POST {BFL_API_BASE}/v1/flux-3-image-klein` avec
+  `https://api.eu.bfl.ai` (« multi-cluster routing limited to EU regions »),
+  1024 × 1024, JPEG, clé dans `x-key`. Interrogation de la `polling_url`
+  renvoyée (exigé par la doc pour les endpoints régionaux) toutes les
+  secondes, 60 fois au plus ; statuts d'attente `Pending`, `Reasoning`,
+  `Generating`, tout autre statut que `Ready` est un échec. Le coût est celui
+  annoncé dans la réponse (`cost`, en crédits à 0,01 $), sinon
+  `BFL_COST_PER_IMAGE_USD`. Une tâche modérée ou en erreur n'est pas facturée
+  par BFL (coût 0) ; un dépassement de délai garde le coût, l'image ayant pu
+  être générée. Image téléchargée tout de suite (l'URL signée expire en 10
+  minutes) et stockée en base, servie seulement à son propriétaire.
+- **Sécurité** : la clé est envoyée à `polling_url` ; cette URL, comme celle
+  de l'image, doit être en HTTPS sous `bfl.ai`, sinon elle est refusée sans
+  être appelée.
+- **Non vérifié** : la doc ne montre aucun exemple sur `api.eu.bfl.ai` (le
+  préfixe `/v1` y est supposé identique) et ne dit pas si toutes les tailles
+  du modèle Klein sont facturées au palier 1K. À confirmer au premier appel
+  réel (champ `cost` de la réponse, tracé dans `ApiCall`).
+- **Écarté** : FLUX.1 [dev] (prix presque triple) ; l'endpoint global
+  `api.bfl.ai` (routage hors UE possible).
+
