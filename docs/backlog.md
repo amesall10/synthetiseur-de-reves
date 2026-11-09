@@ -7,7 +7,7 @@ d'être recopié en issues GitHub (labels : `must`, `should`, `could`, `infra`,
 | # | Ticket | Labels | Branche | État |
 |---|--------|--------|---------|------|
 | 1 | Squelette Django, settings par env, Docker, compose, CI | infra, must | `feat/1-squelette-django` | fait |
-| 2 | Authentification et espace utilisateur | must | | à faire |
+| 2 | Authentification et espace utilisateur | must | `feat/2-authentification` | fait |
 | 3 | Modèles Dream / ConsentRecord / ApiCall + admin | must | | à faire |
 | 4 | `post_with_retry` unique + ApiCall + tests | must | | à faire |
 | 5 | Transcription Voxtral + mock | must | | à faire |

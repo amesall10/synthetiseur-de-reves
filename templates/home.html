@@ -7,5 +7,12 @@
     L'application le transcrit, reconnaît l'émotion qui s'en dégage, en génère une image
     et conserve l'historique de vos rêves dans un tableau de bord personnel.
   </p>
+  <div class="mt-8">
+    {% if user.is_authenticated %}
+      <a href="{% url 'accounts:profile' %}" class="rounded-md bg-indigo-600 px-5 py-2.5 font-medium hover:bg-indigo-500">Accéder à mon espace</a>
+    {% else %}
+      <a href="{% url 'accounts:signup' %}" class="rounded-md bg-indigo-600 px-5 py-2.5 font-medium hover:bg-indigo-500">Commencer</a>
+    {% endif %}
+  </div>
 </section>
 {% endblock %}

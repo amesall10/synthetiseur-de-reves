@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Mon espace · Synthétiseur de rêves{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold">Bonjour {{ user.username }}</h1>
+<p class="mt-2 text-sm text-slate-400">Membre depuis le {{ user.date_joined|date:"j F Y" }}.</p>
+
+<section class="mt-8 rounded-lg border border-slate-800 p-6">
+  <h2 class="text-lg font-medium">Vos rêves</h2>
+  <p class="mt-2 text-sm text-slate-400">L'enregistrement, l'historique et le tableau de bord arrivent avec les prochains tickets.</p>
+</section>
+
+<section class="mt-8 rounded-lg border border-red-900 p-6">
+  <h2 class="text-lg font-medium text-red-300">Supprimer mon compte</h2>
+  <p class="mt-2 text-sm text-slate-400">
+    Supprime définitivement votre compte, vos rêves, leurs transcriptions et leurs images.
+  </p>
+  <a href="{% url 'accounts:delete' %}" class="mt-4 inline-block rounded-md border border-red-700 px-4 py-2 text-sm text-red-300 hover:bg-red-950">Supprimer mon compte</a>
+</section>
+{% endblock %}

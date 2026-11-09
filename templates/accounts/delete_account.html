@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Supprimer mon compte · Synthétiseur de rêves{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-md">
+  <h1 class="mb-4 text-2xl font-semibold text-red-300">Supprimer mon compte</h1>
+  <p class="mb-6 text-sm text-slate-300">
+    Cette action est <strong>irréversible</strong> : votre compte, tous vos rêves, leurs
+    transcriptions, analyses et images seront supprimés immédiatement.
+  </p>
+  <form method="post">
+    {% csrf_token %}
+    {% include "_form.html" %}
+    <div class="flex gap-3">
+      <button type="submit" class="rounded-md bg-red-700 px-4 py-2 font-medium hover:bg-red-600">Supprimer définitivement</button>
+      <a href="{% url 'accounts:profile' %}" class="rounded-md border border-slate-700 px-4 py-2">Annuler</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
