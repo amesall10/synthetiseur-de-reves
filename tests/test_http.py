@@ -426,3 +426,29 @@ def test_real_client_uses_requested_timeout() -> None:
     with _build_client(12.0) as client:
         assert isinstance(client, httpx.Client)
         assert client.timeout.read == 12.0
+
+
+def test_check_fn_rejection_is_recorded_as_error(fake_api: FakeApi, sleeps: list[float]) -> None:
+    """Une réponse 200 inexploitable : erreur tracée, coût conservé, pas de retry."""
+    fake_api.add(ok({"usage": 5}))
+
+    def reject(response: httpx.Response) -> None:
+        """Refuse toute réponse."""
+        raise ValueError("pas de choices")
+
+    with pytest.raises(ApiCallError) as excinfo:
+        post_with_retry(
+            URL,
+            HEADERS,
+            meta=META,
+            json={},
+            cost_fn=lambda r: Decimal("0.001"),
+            check_fn=reject,
+        )
+
+    assert excinfo.value.status_code == 200
+    assert sleeps == []
+    call = only_call()
+    assert call.error == "Réponse invalide : ValueError: pas de choices"
+    assert call.cost_usd == Decimal("0.001")
+    assert not call.succeeded

@@ -160,8 +160,26 @@ MISTRAL_STT_MODEL: str = env.str("MISTRAL_STT_MODEL", default="voxtral-mini-late
 AUDIO_MAX_BYTES: int = env.int("AUDIO_MAX_BYTES", default=10 * 1024 * 1024)
 AUDIO_MAX_SECONDS: int = env.int("AUDIO_MAX_SECONDS", default=300)
 
+# Analyse : Mistral Small, puis Scaleway en secours (API compatible OpenAI).
+MISTRAL_CHAT_URL: str = env.str(
+    "MISTRAL_CHAT_URL", default="https://api.mistral.ai/v1/chat/completions"
+)
+MISTRAL_CHAT_MODEL: str = env.str("MISTRAL_CHAT_MODEL", default="mistral-small-latest")
+SCALEWAY_CHAT_URL: str = env.str(
+    "SCALEWAY_CHAT_URL", default="https://api.scaleway.ai/v1/chat/completions"
+)
+SCALEWAY_CHAT_MODEL: str = env.str(
+    "SCALEWAY_CHAT_MODEL", default="mistral-small-3.2-24b-instruct-2506"
+)
+
 # Coûts unitaires en USD (relevés sur docs.mistral.ai le 2026-11-09, D18).
 VOXTRAL_COST_PER_MINUTE_USD: float = env.float("VOXTRAL_COST_PER_MINUTE_USD", default=0.0035)
+MISTRAL_INPUT_COST_PER_M_USD: float = env.float("MISTRAL_INPUT_COST_PER_M_USD", default=0.15)
+MISTRAL_OUTPUT_COST_PER_M_USD: float = env.float("MISTRAL_OUTPUT_COST_PER_M_USD", default=0.6)
+# Scaleway affiche 0,15 € / 0,35 € par million de tokens : on retient par
+# prudence les tarifs Mistral en dollars, plus élevés (D20).
+SCALEWAY_INPUT_COST_PER_M_USD: float = env.float("SCALEWAY_INPUT_COST_PER_M_USD", default=0.15)
+SCALEWAY_OUTPUT_COST_PER_M_USD: float = env.float("SCALEWAY_OUTPUT_COST_PER_M_USD", default=0.6)
 
 # ---------------------------------------------------------------------------
 # Journalisation : une ligne lisible par événement, sur la sortie standard
