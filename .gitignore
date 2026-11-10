@@ -1,6 +1,7 @@
 # Environnements et secrets
 .venv/
 venv/
+.venv-maquette/
 .env
 .env.local
 
