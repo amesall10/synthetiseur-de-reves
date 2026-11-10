@@ -11,6 +11,13 @@
     ou importez un fichier audio.
   </p>
 
+  {% if budget_exceeded %}
+  <div class="mt-8 rounded-lg border border-amber-700 bg-amber-950 p-5 text-amber-100" id="budget-exceeded" role="status">
+    <h2 class="font-medium">Le service fait une pause jusqu'au {{ budget_exceeded.resets_on|date:"j F" }}</h2>
+    <p class="mt-2 text-sm">Le budget mensuel des services d'IA est atteint : les nouveaux rêves seront de nouveau acceptés le {{ budget_exceeded.resets_on|date:"j F Y" }}. Vos rêves déjà enregistrés restent consultables.</p>
+    <a href="{% url 'dreams:history' %}" class="mt-4 inline-block rounded-md border border-amber-600 px-4 py-2 text-sm">Mes rêves</a>
+  </div>
+  {% else %}
   <form method="post" enctype="multipart/form-data" class="mt-8 space-y-8" id="dream-form">
     {% csrf_token %}
     {% if form.non_field_errors %}
@@ -52,6 +59,7 @@
 
     <button type="submit" class="w-full rounded-md bg-indigo-600 px-4 py-3 font-medium hover:bg-indigo-500">Analyser mon rêve</button>
   </form>
+  {% endif %}
 </div>
 {% endblock %}
 

@@ -14,7 +14,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from dreams.forms import DreamFilterForm, DreamUploadForm
 from dreams.models import Dream
-from dreams.services import consent, pipeline, stats
+from dreams.services import budget, consent, pipeline, stats
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +78,21 @@ def new_dream(request: HttpRequest) -> HttpResponse:
     Args:
         request: Requête authentifiée.
 
+    Au-delà du budget mensuel du service, la page l'explique et aucun rêve
+    n'est enregistré (D32).
+
     Returns:
         Le formulaire, ou une redirection vers la page de traitement.
     """
+    try:
+        budget.require_within_budget(request.user)
+    except budget.BudgetExceeded as exceeded:
+        return render(
+            request,
+            "dreams/new.html",
+            {"budget_exceeded": exceeded.status, "max_seconds": settings.AUDIO_MAX_SECONDS},
+            status=503 if request.method == "POST" else 200,
+        )
     form = DreamUploadForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
