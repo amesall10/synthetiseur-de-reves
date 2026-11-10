@@ -14,7 +14,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from dreams.forms import DreamFilterForm, DreamUploadForm
 from dreams.models import Dream
-from dreams.services import consent, pipeline
+from dreams.services import consent, pipeline, stats
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +212,22 @@ def dream_detail(request: HttpRequest, pk: int) -> HttpResponse:
     dream = _owned_dream(request, pk)
     in_progress = dream.status not in (Dream.Status.DONE, Dream.Status.FAILED)
     return render(request, "dreams/detail.html", {"dream": dream, "in_progress": in_progress})
+
+
+@login_required
+def dashboard(request: HttpRequest) -> HttpResponse:
+    """Tableau de bord : rêves par semaine, émotions, intensité moyenne.
+
+    Args:
+        request: Requête authentifiée.
+
+    Returns:
+        La page du tableau de bord (agrégats du seul utilisateur connecté).
+    """
+    data = stats.dashboard_stats(request.user)
+    return render(
+        request, "dreams/dashboard.html", {"stats": data, "chart_data": data.chart_data()}
+    )
 
 
 def go_to_new_dream(request: HttpRequest) -> HttpResponse:

@@ -12,6 +12,7 @@ urlpatterns = [
     path("", views.go_to_new_dream, name="index"),
     path("new/", views.new_dream, name="new"),
     path("historique/", views.history, name="history"),
+    path("tableau-de-bord/", views.dashboard, name="dashboard"),
     path("<int:pk>/", views.dream_detail, name="detail"),
     path("<int:pk>/processing/", views.processing, name="processing"),
     path("<int:pk>/step/<str:step>/", views.run_step, name="step"),
