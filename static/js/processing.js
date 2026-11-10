@@ -88,9 +88,14 @@
     return { state: "failed", message: "L'étape prend trop de temps. Rechargez la page." };
   }
 
+  // L'image prend 20 à 30 s chez BFL (D29) : on le dit, plutôt qu'un « En cours » muet.
+  const PENDING_TEXT = { image: "Génération de l'image (20 à 30 s)…" };
+
   async function run() {
+    // Étapes appelées l'une après l'autre : la transcription puis l'émotion
+    // s'affichent dès qu'elles sont prêtes, sans attendre l'image.
     for (const step of root.querySelectorAll("[data-step]")) {
-      setStatus(step, "En cours…", "animate-pulse text-sm text-indigo-300");
+      setStatus(step, PENDING_TEXT[step.dataset.step] || "En cours…", "animate-pulse text-sm text-indigo-300");
       const payload = await callStep(step);
       if (payload.state !== "done") {
         setStatus(step, payload.message || "Échec de l'étape.", "text-sm text-red-300");
