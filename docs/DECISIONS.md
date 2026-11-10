@@ -85,6 +85,9 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
 
 ## D8. `ApiCall` porte aussi l'utilisateur, et survit aux suppressions
 
+> **Remplacée en partie par D34** : les `ApiCall` sont désormais supprimés avec le
+> compte, le coût du mois étant reporté sans lien avec la personne.
+
 - **Contexte** : le cadrage liste `dream` (nullable) mais pas `user`. Or le
   plafond de budget est mensuel : si le coût n'était rattaché qu'au rêve,
   supprimer ses rêves remettrait le compteur à zéro.
@@ -614,3 +617,42 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   (il révélerait l'activité des autres) ; stocker les percentiles (calcul
   instantané au volume du projet) ; Sentry avec ses réglages par défaut
   (variables locales envoyées).
+
+## D34. RGPD : appels supprimés avec le compte, report anonyme du budget, purge
+
+> Remplace en partie D8 (`ApiCall.user` en `SET_NULL`).
+
+- **Contexte** : ticket 13. Le cadrage (registre des traitements) dit du
+  journal des appels : « rattaché à l'utilisateur, supprimé avec le
+  compte ». D8 le gardait (`SET_NULL`) pour que le budget global du mois
+  reste exact : sans précaution, supprimer un compte ferait baisser les
+  dépenses du mois, et recréer un compte remettrait une partie du budget à
+  disposition.
+- **Décision** :
+  - `ApiCall.user` passe en `CASCADE` : supprimer le compte supprime ses
+    rêves, ses consentements (D9) et ses appels. `ApiCall.dream` reste en
+    `SET_NULL` : supprimer **un rêve** garde sa trace technique, rattachée
+    au compte et sans contenu ;
+  - juste avant la suppression (signal `pre_delete` sur le modèle
+    utilisateur, donc aussi depuis l'admin ou le shell), le coût du mois
+    en cours du compte est ajouté à `UsageCarryover`, une ligne par mois
+    qui ne contient qu'un mois et un montant. `month_spent_usd` l'ajoute
+    aux `ApiCall` du mois : le plafond (D32) reste exact. Les mois passés
+    ne sont pas reportés, ils ne servent plus au budget ; les métriques
+    (D33) perdent simplement ces appels ;
+  - suppression d'un rêve depuis sa page, après confirmation (POST) : la
+    ligne porte tout le contenu (transcription, analyse, image, audio
+    éventuel), qui disparaît d'un coup ;
+  - `manage.py purge_dreams [--dry-run]` supprime les rêves de plus de
+    `DREAM_RETENTION_DAYS` (365) et efface les audios encore présents
+    après `ORPHAN_AUDIO_MAX_AGE_MINUTES` (60) : dépôt abandonné avant la
+    transcription. Le rêve passe alors en échec avec un message, pour que
+    l'utilisateur comprenne. Planification : ticket 14 ;
+  - le refus de traitement sans `ConsentRecord` en base existait déjà
+    (D24) ; un test vérifie qu'un POST direct sur une étape renvoie 403
+    sans aucun appel d'API.
+- **Écarté** : garder les `ApiCall` anonymisés (`SET_NULL`), contraire au
+  registre du cadrage ; un compteur mensuel incrémenté à chaque appel
+  (deuxième source de vérité, toujours écrite, alors que le report n'est
+  écrit qu'à la suppression d'un compte) ; supprimer les rêves expirés un
+  par un (`delete()` en masse suffit, sans signal propre au rêve).

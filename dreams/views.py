@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -225,6 +226,32 @@ def dream_detail(request: HttpRequest, pk: int) -> HttpResponse:
     dream = _owned_dream(request, pk)
     in_progress = dream.status not in (Dream.Status.DONE, Dream.Status.FAILED)
     return render(request, "dreams/detail.html", {"dream": dream, "in_progress": in_progress})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def delete_dream(request: HttpRequest, pk: int) -> HttpResponse:
+    """Supprime définitivement un rêve, après confirmation.
+
+    La ligne du rêve porte tout son contenu (transcription, analyse, image,
+    audio éventuel) : la supprimer efface tout. La preuve de consentement et
+    la trace technique des appels restent, détachées du rêve et sans contenu
+    (D9, D34).
+
+    Args:
+        request: Requête authentifiée.
+        pk: Identifiant du rêve.
+
+    Returns:
+        La page de confirmation (GET) ou une redirection vers l'historique.
+    """
+    dream = _owned_dream(request, pk)
+    if request.method == "POST":
+        dream.delete()
+        logger.info("event=dream_deleted dream_id=%s user_id=%s", pk, request.user.pk)
+        messages.success(request, "Le rêve a été supprimé définitivement, image comprise.")
+        return redirect("dreams:history")
+    return render(request, "dreams/confirm_delete.html", {"dream": dream})
 
 
 @login_required

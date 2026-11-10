@@ -13,7 +13,16 @@ class DreamsConfig(AppConfig):
     verbose_name = "Rêves"
 
     def ready(self) -> None:
-        """Signale au démarrage une configuration d'image inutilisable."""
-        from dreams.services.image import log_provider_status
+        """Branche les signaux et signale une configuration d'image inutilisable."""
+        from django.contrib.auth import get_user_model
+        from django.db.models.signals import pre_delete
 
+        from dreams.services.image import log_provider_status
+        from dreams.signals import keep_budget_before_user_deletion
+
+        pre_delete.connect(
+            keep_budget_before_user_deletion,
+            sender=get_user_model(),
+            dispatch_uid="dreams_keep_budget_before_user_deletion",
+        )
         log_provider_status()

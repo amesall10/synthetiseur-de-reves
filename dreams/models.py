@@ -206,8 +206,9 @@ class ApiCall(models.Model):
     """Trace d'un appel à une API externe : base du monitoring et du suivi des coûts.
 
     Une ligne par appel logique (toutes tentatives confondues). Ne contient
-    aucun contenu de rêve : elle survit à la suppression du rêve et du compte
-    (``SET_NULL``) pour que le budget du mois reste exact.
+    aucun contenu de rêve : elle survit à la suppression d'un rêve
+    (``SET_NULL``), mais disparaît avec le compte (``CASCADE``, D34) ; le
+    coût du mois en cours est alors reporté dans ``UsageCarryover``.
     """
 
     dream = models.ForeignKey(
@@ -215,7 +216,7 @@ class ApiCall(models.Model):
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
+        on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="api_calls",
@@ -256,3 +257,31 @@ class ApiCall(models.Model):
             ``True`` si aucune erreur n'a été enregistrée.
         """
         return not self.error
+
+
+class UsageCarryover(models.Model):
+    """Coût d'API d'un mois, reporté depuis des comptes supprimés (D34).
+
+    Supprimer un compte supprime ses ``ApiCall`` (RGPD) ; sans ce report, le
+    budget global du mois baisserait d'autant et un compte recréé pourrait
+    le contourner. La ligne ne porte ni utilisateur, ni rêve : seulement un
+    mois et un montant.
+    """
+
+    month = models.DateField(unique=True, help_text="Premier jour du mois (heure locale).")
+    cost_usd = models.DecimalField(max_digits=10, decimal_places=6, default=Decimal("0"))
+
+    class Meta:
+        """Options du modèle."""
+
+        ordering = ["-month"]
+        verbose_name = "report de coût"
+        verbose_name_plural = "reports de coût"
+
+    def __str__(self) -> str:
+        """Représentation lisible.
+
+        Returns:
+            Le mois et le montant reporté.
+        """
+        return f"{self.month:%Y-%m} : {self.cost_usd} $"
