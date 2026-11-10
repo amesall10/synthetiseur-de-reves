@@ -1,8 +1,10 @@
 """Coûts unitaires des API et calcul du coût de chaque appel.
 
 Les tarifs sont des réglages (``config/settings.py``, surchargeables par
-variable d'environnement) : ils changent plus souvent que le code. Tous les
-montants sont en dollars US, en ``Decimal`` (D10).
+variable d'environnement) : ils changent plus souvent que le code. Ils sont
+exprimés dans la devise de facturation du fournisseur (euros pour Mistral et
+Scaleway, dollars pour BFL) ; les coûts enregistrés sont tous en dollars US,
+en ``Decimal`` (D10, D28).
 """
 
 from __future__ import annotations
@@ -12,7 +14,6 @@ from typing import Any
 
 from django.conf import settings
 
-SECONDS_PER_MINUTE = Decimal(60)
 TOKENS_PER_MILLION = Decimal(1_000_000)
 # Arrondi au millionième de dollar, la précision des champs cost_usd.
 QUANT = Decimal("0.000001")
@@ -30,8 +31,20 @@ def to_decimal(value: Any) -> Decimal:
     return value if isinstance(value, Decimal) else Decimal(str(value))
 
 
+def eur_to_usd(amount: Any) -> Decimal:
+    """Convertit un montant en euros en dollars, au taux ``EUR_TO_USD_RATE``.
+
+    Args:
+        amount: Montant en euros.
+
+    Returns:
+        Le montant en USD, non arrondi (l'arrondi se fait sur le coût final).
+    """
+    return to_decimal(amount) * to_decimal(settings.EUR_TO_USD_RATE)
+
+
 def stt_cost(seconds: float | None) -> Decimal:
-    """Coût d'une transcription Voxtral, facturée à la minute d'audio.
+    """Coût d'une transcription Voxtral, facturée à la seconde d'audio.
 
     Args:
         seconds: Durée d'audio facturée, en secondes (``None`` si inconnue).
@@ -41,8 +54,8 @@ def stt_cost(seconds: float | None) -> Decimal:
     """
     if not seconds or seconds < 0:
         return Decimal("0")
-    per_minute = to_decimal(settings.VOXTRAL_COST_PER_MINUTE_USD)
-    return (to_decimal(seconds) / SECONDS_PER_MINUTE * per_minute).quantize(QUANT)
+    per_second = eur_to_usd(settings.VOXTRAL_COST_PER_SECOND_EUR)
+    return (to_decimal(seconds) * per_second).quantize(QUANT)
 
 
 def tokens_cost(usage: dict[str, Any] | None, input_per_m: Any, output_per_m: Any) -> Decimal:
@@ -50,8 +63,8 @@ def tokens_cost(usage: dict[str, Any] | None, input_per_m: Any, output_per_m: An
 
     Args:
         usage: Champ ``usage`` (``prompt_tokens``, ``completion_tokens``).
-        input_per_m: Prix d'un million de tokens en entrée, en USD.
-        output_per_m: Prix d'un million de tokens en sortie, en USD.
+        input_per_m: Prix d'un million de tokens en entrée, en USD (déjà converti).
+        output_per_m: Prix d'un million de tokens en sortie, en USD (déjà converti).
 
     Returns:
         Le coût en USD, arrondi au millionième (0 si ``usage`` est absent).

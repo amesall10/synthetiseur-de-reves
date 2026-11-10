@@ -295,6 +295,7 @@ def request_with_retry(
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
     max_total_s: float = DEFAULT_MAX_TOTAL_SECONDS,
     sleep: Callable[[float], None] | None = None,
+    client: httpx.Client | None = None,
 ) -> RetryOutcome:
     """Cœur unique de la politique de retry, pour toute méthode HTTP.
 
@@ -314,6 +315,9 @@ def request_with_retry(
         timeout: Délai maximal d'une tentative, en secondes.
         max_total_s: Durée totale à ne pas dépasser, attentes comprises.
         sleep: Fonction d'attente ; par défaut ``time.sleep`` (via ``_sleep``).
+        client: Client httpx à réutiliser (connexion maintenue entre plusieurs
+            requêtes vers le même hôte) ; il n'est pas fermé ici. Par défaut,
+            un client est créé puis fermé pour cette seule requête.
 
     Returns:
         Le résultat, réussi ou non.
@@ -325,12 +329,14 @@ def request_with_retry(
     error = ""
     response: httpx.Response | None = None
 
-    with _build_client(timeout) as client:
+    owned = client is None
+    http_client = _build_client(timeout) if client is None else client
+    try:
         for attempt_index in range(len(RETRY_DELAYS_SECONDS) + 1):
             attempts += 1
             retry_after: float | None = None
             try:
-                result = client.request(
+                result = http_client.request(
                     method, url, headers=dict(headers), json=json, data=data, files=files
                 )
             except httpx.TransportError as err:  # inclut les timeouts
@@ -366,6 +372,9 @@ def request_with_retry(
                 delay,
             )
             sleep_fn(delay)
+    finally:
+        if owned:
+            http_client.close()
 
     return RetryOutcome(
         response=response,

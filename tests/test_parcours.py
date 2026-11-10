@@ -460,7 +460,7 @@ class TestPipelineRealProviders:
         dream = Dream.objects.get()
         assert dream.audio_duration_s == 60.0
         assert dream.image_mime == "image/jpeg"
-        expected = costs.stt_cost(60) + Decimal("0.000270") + Decimal("0.009")
+        expected = costs.stt_cost(60) + Decimal("0.000281") + Decimal("0.009")
         assert dream.cost_usd == expected
 
     def test_double_click_never_pays_twice(

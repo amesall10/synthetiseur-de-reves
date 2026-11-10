@@ -11,3 +11,9 @@ class DreamsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "dreams"
     verbose_name = "Rêves"
+
+    def ready(self) -> None:
+        """Signale au démarrage une configuration d'image inutilisable."""
+        from dreams.services.image import log_provider_status
+
+        log_provider_status()

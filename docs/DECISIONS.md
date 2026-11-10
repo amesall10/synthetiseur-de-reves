@@ -391,3 +391,119 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   licence à suivre) ; retirer les accents dans tous les cas (texte français
   dégradé sans raison).
 
+
+## D27. `IMAGE_PROVIDER` inconnu : avertissement au démarrage et dans `/health`
+
+- **Contexte** : une faute de frappe (`IMAGE_PROVIDER=bf1` au lieu de `bfl`)
+  faisait passer l'application en mode simulé sans rien signaler avant le
+  premier rêve, et seulement dans une ligne de log par génération. Les
+  images factices pouvaient passer pour un problème de BFL.
+- **Décision** : `provider_status()` résout `IMAGE_PROVIDER` sans appel
+  réseau et indique le fournisseur demandé, celui vraiment utilisé et le
+  problème éventuel (`unknown`, ou `not_configured` si la clé manque).
+  `DreamsConfig.ready()` écrit un `WARNING`
+  `event=image_provider_misconfigured` avec les valeurs possibles, une fois
+  par processus (migrate puis chaque worker Gunicorn). Une route `/health`
+  minimale (base + fournisseur d'images, aucun secret) renvoie
+  `status=degraded` et le même message dans `warnings`. Elle reste en 200,
+  car le service fonctionne en mode simulé ; seule une base injoignable
+  donne 503. Le mode simulé reste le comportement de repli : un rêve a
+  toujours une image.
+- **Écarté** : refuser de démarrer (une faute de frappe sur un réglage
+  secondaire couperait tout le service) ; un *system check* Django
+  (Gunicorn ne les lance pas, l'avertissement n'apparaîtrait pas en
+  production) ; répondre 503 sur `/health` (un contrôle de santé de Render
+  redémarrerait en boucle un service pourtant utilisable).
+
+## D28. Modèles figés en version datée, tarifs réels dans leur devise
+
+> Complète D17 (modèle Voxtral), D18 (tarif Voxtral) et D20 (tarifs Scaleway).
+
+- **Contexte** : le test réel du 2026-11-10 montre que `voxtral-mini-latest`
+  est facturé comme `voxtral-mini-2602` (0,0000425 € par seconde) et
+  `mistral-small-latest` comme `mistral-small-2603` (0,13 € / 0,51 € par
+  million de tokens) ; FLUX 3 Image Klein coûte bien 0,009 $ l'image. Un
+  alias peut pointer demain vers un autre modèle, au comportement et au prix
+  différents, sans que rien ne change dans le code ni dans `ApiCall`.
+- **Décision** :
+  - par défaut, `voxtral-mini-2602` et `mistral-small-2603` (Scaleway et BFL
+    étaient déjà datés). Changer de modèle devient une décision visible dans
+    la config, et un test interdit le retour d'un alias `-latest` ;
+  - chaque tarif est saisi dans la devise de la facture : euros pour
+    Mistral (Voxtral **à la seconde**, comme sur la facture) et Scaleway
+    (grille 0,15 € / 0,35 €, qui remplace la prudence « tarifs Mistral en
+    dollars » de D20), dollars pour BFL. Les coûts restent stockés en USD
+    (`cost_usd`, `MONTHLY_BUDGET_USD`) ; la conversion passe par
+    `EUR_TO_USD_RATE`, fixé à 1,21 : plus haut du cours en 2026 (1,208 le
+    27 janvier), arrondi au-dessus, alors que le cours tourne autour de
+    1,12 à 1,15 en octobre et novembre. Le budget est surestimé de 5 à 8 %,
+    jamais sous-estimé ;
+  - pour un rêve type (60 s d'audio, 1 000 tokens en entrée et 200 en sortie), le coût passe de
+    0,00377 $ à 0,00337 $ hors image ; l'image (0,009 $) reste le poste
+    principal ;
+  - `config/settings_test.py` ne lit plus le `.env` local
+    (`DJANGO_READ_DOT_ENV=False`) : un `.env` qui forçait encore
+    `-latest` faisait échouer les tests en local, mais pas en CI.
+- **Écarté** : passer toute l'application en euros (renommer `cost_usd` et
+  le budget, migration pour un gain nul, BFL facturant en dollars) ; un
+  taux de change récupéré en ligne (appel réseau à chaque calcul de coût,
+  et résultat non reproductible en test) ; garder les alias en ajoutant un
+  contrôle du champ `model` des réponses (on découvrirait le changement
+  après l'avoir payé).
+
+## D29. BFL : attente mesurée par phase, polling progressif, connexion maintenue
+
+> Complète D23 (interrogation toutes les secondes, 60 fois au plus).
+
+- **Contexte** : en réel, l'étape image prenait 28 s (ligne `ApiCall`)
+  contre 1,5 s pour la transcription et l'analyse. `ApiCall` ne donne que
+  la durée totale ; impossible de savoir si le temps venait de la
+  soumission, de l'attente ou de notre polling.
+- **Mesure avant** (2026-11-10, 3 générations réelles, même prompt,
+  intervalle fixe de 1 s, un nouveau client HTTP par interrogation) :
+
+  | essai | total | soumission | attente | interrogations | durée d'une interrogation | téléchargement |
+  |---|---|---|---|---|---|---|
+  | 1 | 26,2 s | 1,08 s | 24,3 s | 17 | 431 ms | 0,80 s |
+  | 2 | 53,1 s | 0,67 s | 51,6 s | 36 | 434 ms | 0,81 s |
+  | 3 | 67,4 s | 0,81 s | 65,7 s | 38 | 729 ms | 0,88 s |
+
+  La soumission prend moins d'une seconde : **l'attente du résultat, côté
+  BFL (statut `Generating`), fait plus de 90 % du temps**. Chaque
+  interrogation refaisait la poignée de main TLS (430 à 730 ms), ce qui
+  retardait d'autant la détection de `Ready`.
+- **Décision** :
+  - pauses progressives 0,5 ; 0,75 ; 1,125 ; 1,69 s puis 2 s au plus
+    (`poll_delays`) : une image rapide est vue tôt, une image lente coûte
+    moins de requêtes ;
+  - une seule connexion HTTP pour toutes les interrogations
+    (`request_with_retry(..., client=...)`, la politique de retry reste
+    unique) ;
+  - budget de 90 s pour toute la génération au lieu de « 60 interrogations »
+    (dont la durée réelle dépendait du réseau), pour que le téléchargement
+    tienne encore sous le timeout Gunicorn de 120 s ; 90 interrogations au
+    plus en garde-fou ;
+  - durées de soumission, d'attente et de téléchargement mesurées à chaque
+    génération : log `event=bfl_timing submit_ms wait_ms download_ms polls`.
+- **Mesure après** (mêmes conditions, 3 générations) :
+
+  | essai | total | soumission | attente | interrogations | durée d'une interrogation | téléchargement |
+  |---|---|---|---|---|---|---|
+  | 1 | 24,1 s | 1,09 s | 21,4 s | 12 | 108 ms | 1,39 s |
+  | 2 | 24,1 s | 1,09 s | 21,2 s | 12 | 95 ms | 1,08 s |
+  | 3 | 25,1 s | 1,00 s | 20,9 s | 12 | 72 ms | 2,80 s |
+
+  Une interrogation coûte 4 à 7 fois moins cher (72 à 108 ms), et il en
+  faut 12 au lieu de 17 à 38. Le gain propre au polling se limite toutefois
+  à environ une seconde par image : **le gros de l'attente (20 s et plus)
+  est le temps de génération chez BFL**, très variable d'un essai à l'autre
+  (24 à 66 s avant, 21 s après). Trois essais ne suffisent pas à conclure
+  sur cette variance, qui ne dépend pas de notre code.
+- **Conséquence pour l'interface** : la transcription et l'émotion
+  s'affichent dès que leur étape est finie, sans attendre l'image (étapes
+  appelées l'une après l'autre ; la page de détail montre un rêve analysé
+  dont l'image est en cours).
+- **Écarté** : un intervalle fixe court (0,5 s : jusqu'à 130 requêtes pour
+  une image lente) ; l'endpoint global `api.bfl.ai`, peut-être plus rapide
+  mais sans garantie de traitement dans l'UE (D23) ; générer l'image en
+  arrière-plan (file de tâches exclue par le cadrage).

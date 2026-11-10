@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 from decimal import Decimal
 
 import httpx
@@ -143,13 +144,20 @@ class TestProviderSelection:
         call = only_success()
         assert (call.provider, call.source, call.dream) == ("mock", Source.MOCK, dream)
 
-    def test_unknown_provider_falls_back(self, settings: SettingsWrapper) -> None:
-        """Un fournisseur inconnu : mode dégradé plutôt qu'une erreur."""
+    def test_unknown_provider_falls_back(
+        self, settings: SettingsWrapper, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Un fournisseur inconnu : mode dégradé, mais jamais en silence."""
         settings.IMAGE_PROVIDER = "dalle"
 
-        _, _, source = generate_image("x")
+        with caplog.at_level(logging.ERROR, logger="dreams.services.image"):
+            _, _, source = generate_image("x")
 
         assert source == Source.MOCK
+        assert any(
+            "event=image_provider_unknown provider='dalle'" in r.getMessage()
+            for r in caplog.records
+        )
 
     def test_bfl_without_key_falls_back(self, settings: SettingsWrapper, fake_api: FakeApi) -> None:
         """BFL choisi mais sans clé : mock, sans appel réseau."""
@@ -174,7 +182,7 @@ class TestBfl:
         data, mime, source = generate_image("a calm sea", dream=dream)
 
         assert (data, mime, source) == (JPEG, "image/jpeg", Source.REAL)
-        assert sleeps == [1.0, 1.0]
+        assert sleeps == [0.5, 0.75]
         call = ApiCall.objects.get()
         assert (call.provider, call.model, call.status_code, call.attempts) == (
             "bfl",
@@ -264,6 +272,62 @@ class TestBfl:
         assert "3 interrogations" in failed.error
         assert failed.cost_usd == Decimal("0.009000")
 
+    def test_wait_budget_stops_polling(
+        self, fake_api: FakeApi, monkeypatch: pytest.MonkeyPatch, sleeps: list[float]
+    ) -> None:
+        """Le budget de temps arrête les interrogations, sans pause inutile."""
+        now = [0.0]
+        monkeypatch.setattr(image_service.http_service, "_monotonic", lambda: now[0])
+
+        def slow_poll(_delay: float) -> None:
+            now[0] += 60.0  # chaque interrogation « coûte » une minute
+
+        monkeypatch.setattr(image_service.http_service, "_sleep", slow_poll)
+        fake_api.add(submitted(), polled("Pending"), polled("Pending"), host=API_HOST)
+
+        _, _, source = generate_image("x")
+
+        assert source == Source.MOCK
+        # t=60 s : une 2e interrogation tient encore dans les 90 s ; à t=120 s, abandon.
+        assert "après 2 interrogations" in ApiCall.objects.get(provider="bfl").error
+
+    def test_polls_reuse_one_connection(
+        self, fake_api: FakeApi, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Soumission, interrogations et téléchargement : trois clients, pas un par requête."""
+        built: list[float] = []
+        original = image_service.http_service._build_client
+
+        def counting(timeout: float) -> httpx.Client:
+            built.append(timeout)
+            return original(timeout)
+
+        monkeypatch.setattr(image_service.http_service, "_build_client", counting)
+        polls = [polled("Generating") for _ in range(5)]
+        fake_api.add(submitted(), *polls, polled("Ready", SAMPLE_URL), host=API_HOST)
+        fake_api.add(jpeg(), host=DELIVERY_HOST)
+
+        generate_image("x")
+
+        assert built == [20.0, 10.0, 20.0]
+
+    def test_timing_is_measured_and_logged(
+        self, fake_api: FakeApi, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Durées de soumission, d'attente et de téléchargement mesurées séparément."""
+        fake_api.add(submitted(), polled("Pending"), polled("Ready", SAMPLE_URL), host=API_HOST)
+        fake_api.add(jpeg(), host=DELIVERY_HOST)
+        provider = BflProvider()
+
+        with caplog.at_level(logging.INFO, logger="dreams.services.image"):
+            provider.generate("x", dream=None)
+
+        timing = provider.last_timing
+        assert timing.polls == 2
+        assert min(timing.submit_ms, timing.wait_ms, timing.download_ms) >= 0
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("event=bfl_timing" in m and "polls=2" in m for m in messages)
+
     def test_polling_error_falls_back(self, fake_api: FakeApi) -> None:
         """Interrogation refusée (404) : mode dégradé."""
         fake_api.add(submitted(), httpx.Response(404), host=API_HOST)
@@ -305,6 +369,13 @@ class TestBfl:
 
         with pytest.raises(ImageGenerationError):
             BflProvider().generate("x", dream=None)
+
+
+def test_poll_delays_grow_to_two_seconds() -> None:
+    """0,5 s d'abord, puis ×1,5 jusqu'au plafond de 2 s."""
+    delays = image_service.poll_delays()
+
+    assert [next(delays) for _ in range(7)] == [0.5, 0.75, 1.125, 1.688, 2.0, 2.0, 2.0]
 
 
 @pytest.mark.parametrize(

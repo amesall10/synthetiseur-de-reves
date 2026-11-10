@@ -27,6 +27,19 @@ def test_api_keys_are_blank_in_tests() -> None:
     assert settings.IMAGE_PROVIDER == "mock"
 
 
+def test_default_models_are_pinned() -> None:
+    """Aucun alias « -latest » : le modèle (et donc son prix) ne change pas seul (D28)."""
+    for model in (
+        settings.MISTRAL_STT_MODEL,
+        settings.MISTRAL_CHAT_MODEL,
+        settings.SCALEWAY_CHAT_MODEL,
+        settings.BFL_MODEL,
+    ):
+        assert "latest" not in model
+    assert settings.MISTRAL_STT_MODEL == "voxtral-mini-2602"
+    assert settings.MISTRAL_CHAT_MODEL == "mistral-small-2603"
+
+
 def test_secret_key_required_when_debug_off(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sans DEBUG, l'absence de DJANGO_SECRET_KEY empêche le démarrage."""
     import config.settings as base_settings
