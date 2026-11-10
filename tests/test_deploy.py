@@ -59,6 +59,14 @@ class TestRenderBlueprint:
         assert "if: github.event_name == 'push' && github.ref == 'refs/heads/main'" in job
         assert "secrets.RENDER_DEPLOY_HOOK" in job
 
+    def test_mockup_is_excluded_from_image(self) -> None:
+        """La maquette Streamlit et sa configuration ne vont jamais dans l'image Docker."""
+        ignored = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+
+        assert "maquette" in ignored
+        assert ".streamlit" in ignored
+        assert "streamlit" not in (ROOT / "requirements.txt").read_text(encoding="utf-8")
+
     def test_container_purges_and_uses_threads(self) -> None:
         """Le conteneur lance la purge RGPD et Gunicorn à threads."""
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")

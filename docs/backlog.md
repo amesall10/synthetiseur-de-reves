@@ -24,6 +24,7 @@ Ce fichier en garde une copie lisible hors ligne. Labels : `must`, `should`,
 | [#15](https://github.com/amesall10/synthetiseur-de-reves/issues/15) | README, install.sh, .env.example | docs, must | `feat/15-documentation` | PR |
 | [#16](https://github.com/amesall10/synthetiseur-de-reves/issues/16) | Test de charge | test, should | `feat/16-charge` | PR |
 | [#17](https://github.com/amesall10/synthetiseur-de-reves/issues/17) | Micro-vidéo + ambiance sonore | could | | **hors périmètre** |
+| [#40](https://github.com/amesall10/synthetiseur-de-reves/issues/40) | 18. Maquette interactive Streamlit (pré-production) | should | `feat/40-maquette-streamlit` | PR |
 
 ---
 
@@ -125,3 +126,10 @@ Ce fichier en garde une copie lisible hors ligne. Labels : `must`, `should`,
 ## 17. Micro-vidéo + ambiance sonore — `could`
 
 Hors périmètre : ne pas réaliser.
+
+## 18. Maquette interactive Streamlit (issue #40) — `should`
+
+- [ ] `maquette/` séparé de Django (`requirements.txt` propre, `streamlit>=1.35`), exclu de l'image Docker.
+- [ ] Micro (`st.audio_input` si disponible) ou import `.wav`/`.mp3`, type et taille contrôlés.
+- [ ] Transcription simulée avec `st.spinner`, image Picsum avec secours local, sélecteur des 6 émotions avec icônes.
+- [ ] Panne simulée, messages clairs, jamais de trace brute ; README ; tests séparés de la couverture Django.

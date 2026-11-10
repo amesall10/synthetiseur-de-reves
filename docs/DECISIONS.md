@@ -798,3 +798,41 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
 - **Écarté** : FLUX.2 [klein] 4B par défaut (moins fidèle, plus cher) ;
   le choisir seulement sous forte charge chez BFL (deux rendus différents
   pour un même produit, et aucun moyen simple de prévoir la file).
+
+## D39. Maquette Streamlit séparée : logique pure, détection du micro, image de secours
+
+- **Contexte** : le sujet de pré-production exige une maquette interactive
+  Streamlit (issue #40) : micro ou import, transcription simulée, image
+  placeholder, sélecteur d'émotion, gestion d'erreurs. Elle ne doit ni
+  alourdir ni fragiliser l'application Django.
+- **Décision** :
+  - dossier `maquette/` avec son `requirements.txt` (`streamlit>=1.35`,
+    `pillow`), exclu de l'image Docker (`.dockerignore`, vérifié par un
+    test) ; ses tests ont leur propre `pytest.ini` (`-p no:django`) et leur
+    propre job de CI : la suite et la couverture de l'application ne
+    changent pas ;
+  - **toute la logique dans `logic.py`, sans import de Streamlit**
+    (validation, transcription simulée, émotions, URL, image de secours,
+    attente et téléchargement injectables) ; `app.py` ne fait que
+    l'affichage. `streamlit.testing` vérifie en plus le premier écran et la
+    case de panne ;
+  - `st.audio_input` n'existe qu'à partir de Streamlit 1.39 : la maquette
+    le détecte (`hasattr`) et ne propose que l'import sinon. Testé avec
+    Streamlit 1.35.0 (sans micro) et 1.67.0 (avec micro) ;
+  - contrôle du fichier comme dans l'application : extension, 10 Mo, et
+    **signature du contenu** (un `.mp3` qui contient un WAV est refusé) ;
+  - image Lorem Picsum à graine stable (`<émotion>-<empreinte SHA-256 de
+    12 caractères>`) : seuls ces deux éléments sortent de la machine. Toute
+    erreur réseau (ou la panne simulée) donne un dégradé local de la
+    couleur de l'émotion, sans exception. La légende dit que l'image n'est
+    pas générée par IA ;
+  - mêmes clés, libellés et couleurs d'émotion que l'application ; thème
+    sombre slate/indigo dans `.streamlit/config.toml` à la racine (Streamlit
+    ne lit sa configuration que dans le dossier courant), avec
+    `showErrorDetails = false` et sans statistiques d'usage ; chaque étape
+    attrape ses erreurs prévues, et un dernier filet affiche un message
+    générique au lieu d'une trace.
+- **Écarté** : partager du code avec `dreams/` (la maquette devrait
+  installer Django) ; un fichier image de secours versionné (le dégradé
+  Pillow suffit et suit l'émotion) ; lancer depuis `maquette/` (la commande
+  demandée part de la racine).

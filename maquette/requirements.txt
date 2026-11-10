@@ -1,0 +1,4 @@
+# Maquette Streamlit (pré-production) : indépendante de l'application Django.
+streamlit>=1.35
+# Image locale de secours (déjà requise par Streamlit, déclarée car importée).
+pillow>=10
