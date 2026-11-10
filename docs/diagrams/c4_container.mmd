@@ -5,12 +5,12 @@ flowchart LR
     subgraph WEB["Conteneur web · Docker python:3.12-slim · non-root"]
       direction TB
       G["Gunicorn (threads)"]
-      V["Django 5 — vues<br/>accounts : compte, suppression<br/>dreams : nouveau rêve, étapes,<br/>historique, tableau de bord,<br/>métriques, /health<br/>templates Tailwind + Chart.js"]
+      V["Django 5 — vues<br/>accounts : compte, suppression<br/>dreams : nouveau rêve, traitement,<br/>étapes, historique, tableau de bord<br/>métriques, /health<br/>templates Tailwind + Chart.js"]
       SV["dreams/services<br/>pipeline · stt · analyzer · image<br/>costs · http (post_with_retry) · mock"]
-      CMD["purge_dreams<br/>(tâche planifiée)"]
+      CMD["purge_dreams<br/>(au démarrage du conteneur ;<br/>audios orphelins purgés<br/>à chaque dépôt)"]
       G --> V --> SV
     end
-    DB[("PostgreSQL 16<br/>User · Dream<br/>ConsentRecord · ApiCall")]
+    DB[("PostgreSQL 16<br/>User · Dream · ConsentRecord<br/>ApiCall · UsageCarryover")]
   end
   MI["Mistral API<br/>Voxtral + Mistral Small"]
   SCW["Scaleway<br/>secours LLM"]

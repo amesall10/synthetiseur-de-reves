@@ -6,14 +6,14 @@ sequenceDiagram
   participant DB as PostgreSQL
   participant M as Mistral
   participant B as BFL (UE)
-  U->>V: POST /dreams/new (audio + consentement)
-  V->>DB: vérifie consentement, budget du mois
-  alt consentement absent ou budget atteint
-    V-->>U: refus explicite (403 / message), aucun appel IA
+  U->>V: POST /dreams/new/ (audio + case de consentement)
+  alt case non cochée ou budget du mois atteint
+    V-->>U: erreur de formulaire / message, aucun appel IA
   end
-  V->>DB: Dream(status=uploaded, audio)
-  V-->>U: redirection vers « Traitement »
-  U->>V: POST step/transcribe
+  V->>DB: Dream(status=uploaded, audio) + ConsentRecord
+  V-->>U: redirection vers /dreams/<id>/processing/
+  U->>V: POST /dreams/<id>/step/transcribe/
+  V->>DB: consentement en base ? (403 sinon)
   V->>P: transcribe(dream) — idempotent
   P->>M: POST /audio/transcriptions (voxtral-mini-2602)
   alt 429 / 5xx / timeout
@@ -22,7 +22,7 @@ sequenceDiagram
   M-->>P: texte + segments
   P->>DB: transcript, durée calculée, audio vidé, ApiCall
   V-->>U: transcription affichée (badge Réel)
-  U->>V: POST step/analyze
+  U->>V: POST /dreams/<id>/step/analyze/
   V->>P: analyze(dream) — idempotent
   P->>M: chat/completions JSON (mistral-small-2603)
   alt Mistral en échec
@@ -30,7 +30,7 @@ sequenceDiagram
   end
   P->>DB: émotion validée, thèmes, résumé, prompt d'image, ApiCall
   V-->>U: émotion affichée
-  U->>V: POST step/image
+  U->>V: POST /dreams/<id>/step/image/
   V->>P: generate_image(dream) — idempotent
   P->>B: soumission (prompt seul)
   alt BFL répond
