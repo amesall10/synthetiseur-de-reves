@@ -6,3 +6,7 @@ bfl,flux-3-image-klein,10,0,38219,57431,22561,57507,2026-11-10,"soumission + att
 bfl_soumission,flux-3-image-klein,10,0,765,952,593,1015,2026-11-10,
 bfl_attente,flux-3-image-klein,10,0,36554,55869,21156,55890,2026-11-10,"attente du statut Ready, 20.3 interrogations en moyenne"
 bfl_telechargement,flux-3-image-klein,10,0,726,862,531,890,2026-11-10,
+bfl,flux-2-klein-4b,5,0,7679,11318,6311,12188,2026-11-10,"soumission + attente + téléchargement, endpoint UE, coût annoncé 0.014 $ l'image"
+bfl_soumission,flux-2-klein-4b,5,0,1202,1305,1030,1327,2026-11-10,
+bfl_attente,flux-2-klein-4b,5,0,5219,8728,3640,9593,2026-11-10,"attente du statut Ready, 4.2 interrogations en moyenne"
+bfl_telechargement,flux-2-klein-4b,5,0,1328,1372,1140,1375,2026-11-10,
