@@ -10,7 +10,10 @@ d'erreur 500.
 
 Projet individuel RNCP 36146 (Concepteur développeur de solutions digitales).
 Les choix techniques sont justifiés dans [docs/DECISIONS.md](docs/DECISIONS.md)
-(D1 à D38) et les tickets décrits dans [docs/backlog.md](docs/backlog.md).
+(D1 à D39) et les tickets décrits dans [docs/backlog.md](docs/backlog.md).
+
+Une **maquette interactive Streamlit** (pré-production, tout simulé) est
+dans [maquette/](maquette/README.md) : `streamlit run maquette/app.py`.
 
 ## Sommaire
 
@@ -288,6 +291,7 @@ dreams/
 templates/, static/js/   pages et scripts (enregistreur, traitement, graphiques)
 tests/             suite pytest ; tests/load/ : test de charge
 scripts/           bench_latency.py (latences réelles)
+maquette/          maquette Streamlit (hors image Docker, tests séparés)
 docs/              DECISIONS.md, backlog.md, charge.md, latences.csv,
                    diagrams/ (C4, modèle de données, séquence)
 Dockerfile, docker-compose.yml, render.yaml, install.sh

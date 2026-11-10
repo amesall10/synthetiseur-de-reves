@@ -1,0 +1,24 @@
+# Configuration de la maquette Streamlit (maquette/app.py). Streamlit lit ce
+# fichier dans le dossier courant : lancer depuis la racine du dépôt.
+# Sans effet sur l'application Django ; exclu de l'image Docker.
+
+[theme]
+# Couleurs de l'application (Tailwind : slate-950, slate-900, indigo-500).
+base = "dark"
+primaryColor = "#6366f1"
+backgroundColor = "#020617"
+secondaryBackgroundColor = "#0f172a"
+textColor = "#f1f5f9"
+
+[server]
+# Même limite que l'application (10 Mo), vérifiée aussi par la maquette.
+maxUploadSize = 10
+
+[client]
+# Jamais de trace d'erreur brute à l'écran.
+showErrorDetails = false
+toolbarMode = "minimal"
+
+[browser]
+# Pas de statistiques d'usage envoyées à Streamlit.
+gatherUsageStats = false
