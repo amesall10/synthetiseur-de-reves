@@ -216,3 +216,19 @@ LOGGING = {
         "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }
+
+# ---------------------------------------------------------------------------
+# Monitoring : Sentry seulement si SENTRY_DSN est défini, sans aucun contenu
+# de rêve (ni corps de requête, ni variables locales, ni PII ; D33).
+# ---------------------------------------------------------------------------
+SENTRY_DSN: str = env.str("SENTRY_DSN", default="")
+SENTRY_ENVIRONMENT: str = env.str("SENTRY_ENVIRONMENT", default="production")
+SENTRY_TRACES_SAMPLE_RATE: float = env.float("SENTRY_TRACES_SAMPLE_RATE", default=0.0)
+if SENTRY_DSN:
+    from config.sentry import init_sentry
+
+    init_sentry(
+        SENTRY_DSN,
+        environment=SENTRY_ENVIRONMENT,
+        traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+    )

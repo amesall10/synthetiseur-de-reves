@@ -29,6 +29,7 @@
             <a href="{% url 'dreams:history' %}" class="hover:text-indigo-300">Mes rêves</a>
             <a href="{% url 'dreams:dashboard' %}" class="hover:text-indigo-300">Tableau de bord</a>
             <a href="{% url 'accounts:profile' %}" class="hover:text-indigo-300">Mon espace</a>
+            {% if user.is_staff %}<a href="{% url 'metrics' %}" class="hover:text-indigo-300">Métriques</a>{% endif %}
             <form method="post" action="{% url 'logout' %}">
               {% csrf_token %}
               <button type="submit" class="hover:text-indigo-300">Se déconnecter</button>

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Métriques · Synthétiseur de rêves{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold">Métriques d'exploitation</h1>
+<p class="mt-2 text-sm text-slate-400">Depuis le {{ metrics.since|date:"j F Y à H:i" }} (30 jours), tous utilisateurs, d'après le journal des appels d'API. Aucun contenu de rêve.</p>
+
+<section class="mt-6 grid gap-4 sm:grid-cols-4" id="kpis">
+  <div class="rounded-lg border border-slate-800 p-5">
+    <p class="text-sm text-slate-400">Bout en bout (p50 / p95)</p>
+    <p class="mt-1 text-2xl font-semibold" id="e2e">
+      {% if metrics.e2e_p50_ms is not None %}{{ metrics.e2e_p50_ms|floatformat:0 }} / {{ metrics.e2e_p95_ms|floatformat:0 }} ms{% else %}–{% endif %}
+    </p>
+    <p class="mt-1 text-xs text-slate-400">{{ metrics.dreams_done }} rêve{{ metrics.dreams_done|pluralize }} complet{{ metrics.dreams_done|pluralize }} · cible &lt; 30 s / 45 s</p>
+  </div>
+  <div class="rounded-lg border border-slate-800 p-5">
+    <p class="text-sm text-slate-400">Mode dégradé</p>
+    <p class="mt-1 text-2xl font-semibold" id="degraded">{% if metrics.degraded_rate is not None %}{% widthratio metrics.degraded_rate 1 100 %} %{% else %}–{% endif %}</p>
+    <p class="mt-1 text-xs text-slate-400">secours ou simulé · cible &lt; 5 %</p>
+  </div>
+  <div class="rounded-lg border border-slate-800 p-5">
+    <p class="text-sm text-slate-400">Coût moyen d'un rêve</p>
+    <p class="mt-1 text-2xl font-semibold" id="cost-per-dream">{% if metrics.cost_per_dream_usd is not None %}{{ metrics.cost_per_dream_usd|floatformat:4 }} ${% else %}–{% endif %}</p>
+    <p class="mt-1 text-xs text-slate-400">cible &lt; 0,03 $</p>
+  </div>
+  <div class="rounded-lg border {% if budget.exceeded %}border-amber-700{% else %}border-slate-800{% endif %} p-5">
+    <p class="text-sm text-slate-400">Budget du mois</p>
+    <p class="mt-1 text-2xl font-semibold" id="budget">{{ budget.spent_usd|floatformat:4 }} / {{ budget.limit_usd|floatformat:2 }} $</p>
+    <p class="mt-1 text-xs text-slate-400">{% widthratio budget.ratio 1 100 %} % · remise à zéro le {{ budget.resets_on|date:"j F" }}{% if budget.exceeded %} · <strong class="text-amber-300">nouveaux rêves refusés</strong>{% endif %}</p>
+  </div>
+</section>
+
+<div class="mt-6 overflow-x-auto rounded-lg border border-slate-800">
+  <table class="w-full text-left text-sm" id="steps">
+    <thead class="bg-slate-900 text-slate-400">
+      <tr>
+        <th class="px-4 py-2 font-medium">Étape</th>
+        <th class="px-4 py-2 font-medium">Abouties</th>
+        <th class="px-4 py-2 font-medium">p50</th>
+        <th class="px-4 py-2 font-medium">p95</th>
+        <th class="px-4 py-2 font-medium">Mode dégradé</th>
+        <th class="px-4 py-2 font-medium">Appels en erreur</th>
+        <th class="px-4 py-2 font-medium">Coût</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for step in metrics.steps %}
+        <tr class="border-t border-slate-800">
+          <td class="px-4 py-2">{{ step.label }}</td>
+          <td class="px-4 py-2">{{ step.completed }}</td>
+          <td class="px-4 py-2">{% if step.p50_ms is not None %}{{ step.p50_ms|floatformat:0 }} ms{% else %}–{% endif %}</td>
+          <td class="px-4 py-2">{% if step.p95_ms is not None %}{{ step.p95_ms|floatformat:0 }} ms{% else %}–{% endif %}</td>
+          <td class="px-4 py-2">{% if step.degraded_rate is not None %}{% widthratio step.degraded_rate 1 100 %} % ({{ step.degraded }}){% else %}–{% endif %}</td>
+          <td class="px-4 py-2">{{ step.failed_calls }}</td>
+          <td class="px-4 py-2">{{ step.cost_usd|floatformat:4 }} $</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot class="border-t border-slate-700">
+      <tr><td class="px-4 py-2 font-medium" colspan="6">Total sur 30 jours</td><td class="px-4 py-2 font-medium">{{ metrics.total_cost_usd|floatformat:4 }} $</td></tr>
+    </tfoot>
+  </table>
+</div>
+<p class="mt-3 text-xs text-slate-400">Latences : appels réels ou de secours réussis (les résultats simulés, sans appel réseau, sont exclus). Bout en bout : somme des appels d'un rêve complet, attentes et échecs compris.</p>
+{% endblock %}

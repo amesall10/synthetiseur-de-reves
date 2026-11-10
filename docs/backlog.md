@@ -18,7 +18,7 @@ Ce fichier en garde une copie lisible hors ligne. Labels : `must`, `should`,
 | [#9](https://github.com/amesall10/synthetiseur-de-reves/issues/9) | Historique avec filtres date/émotion | must | `feat/9-historique` | PR |
 | [#10](https://github.com/amesall10/synthetiseur-de-reves/issues/10) | Dashboard statistiques | must | `feat/10-dashboard` | PR |
 | [#11](https://github.com/amesall10/synthetiseur-de-reves/issues/11) | Plafond de budget | should | `feat/11-budget` | PR |
-| [#12](https://github.com/amesall10/synthetiseur-de-reves/issues/12) | Page Métriques + /health + logs + Sentry | should | | à faire |
+| [#12](https://github.com/amesall10/synthetiseur-de-reves/issues/12) | Page Métriques + /health + logs + Sentry | should | `feat/12-metriques` | PR |
 | [#13](https://github.com/amesall10/synthetiseur-de-reves/issues/13) | RGPD : consentement, suppression, purge | must | | à faire |
 | [#14](https://github.com/amesall10/synthetiseur-de-reves/issues/14) | Déploiement Render automatisé | infra, must | | à faire |
 | [#15](https://github.com/amesall10/synthetiseur-de-reves/issues/15) | README, install.sh, .env.example | docs, must | | à faire |
