@@ -26,6 +26,7 @@
         {% block nav %}
           {% if user.is_authenticated %}
             <a href="{% url 'dreams:new' %}" class="hover:text-indigo-300">Nouveau rêve</a>
+            <a href="{% url 'dreams:history' %}" class="hover:text-indigo-300">Mes rêves</a>
             <a href="{% url 'accounts:profile' %}" class="hover:text-indigo-300">Mon espace</a>
             <form method="post" action="{% url 'logout' %}">
               {% csrf_token %}

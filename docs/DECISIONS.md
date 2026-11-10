@@ -507,3 +507,30 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   une image lente) ; l'endpoint global `api.bfl.ai`, peut-être plus rapide
   mais sans garantie de traitement dans l'UE (D23) ; générer l'image en
   arrière-plan (file de tâches exclue par le cadrage).
+
+## D30. Historique : filtres en dates locales, mention sous chaque image
+
+- **Contexte** : ticket 9 (historique filtrable, page d'un rêve). Deux
+  mentions demandées : « Image générée par IA » sous chaque image, et
+  « L’émotion affichée est une indication, pas un diagnostic » partout où
+  l'émotion est montrée.
+- **Décision** :
+  - filtres en GET (`start`, `end`, `emotion`), bornes incluses, comparées
+    en **heure de Paris** (`created_at__date`) : un rêve raconté à 0 h 30 le
+    5 compte pour le 5, pas pour le 4 (UTC). Un filtre invalide (dates
+    inversées, émotion inconnue) est signalé et ignoré : jamais d'erreur ;
+  - 10 rêves par page, pagination qui conserve les filtres ; la liste ne
+    charge ni l'audio, ni l'image, ni la transcription (`defer`), et le
+    nombre de requêtes SQL ne dépend pas du nombre de rêves (testé) ;
+  - la page d'un rêve montre ce qui est prêt : la transcription et
+    l'émotion d'un rêve analysé s'affichent alors que l'image est encore
+    en cours, avec un lien vers le suivi ;
+  - mention sous **chaque** image (page, vignettes, page « Traitement ») :
+    « Image générée par IA » pour une image BFL. L'image de remplacement
+    (Pillow, sans aucun modèle) porte « Image de remplacement, créée sans
+    IA » : l'étiqueter « générée par IA » serait faux. L'avertissement sur
+    l'émotion est un gabarit partagé, inclus sur la page du rêve et la page
+    « Traitement », puis sur le tableau de bord (ticket 10).
+- **Écarté** : une période en liste fixe (7 j / 30 j / 1 an), moins utile
+  pour retrouver un rêve précis ; la même mention « générée par IA » pour
+  toutes les images (fausse pour l'image de remplacement).
