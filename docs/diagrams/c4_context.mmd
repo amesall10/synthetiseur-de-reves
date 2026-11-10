@@ -1,0 +1,21 @@
+flowchart LR
+  U["👤 Rêveur<br/>(Inès, Marc)<br/><i>raconte ses rêves, consulte son journal</i>"]
+  A["🧑‍💻 Exploitant<br/><i>suit coûts, latences, mode dégradé</i>"]
+  S["<b>Synthétiseur de rêves</b><br/>Application web Django<br/><i>transcrit, classe l'émotion,<br/>génère une image, historise</i>"]
+  M["Mistral AI (France)<br/>Voxtral : transcription<br/>Mistral Small : analyse"]
+  B["Black Forest Labs (Allemagne)<br/>FLUX 3 Image Klein<br/>endpoint UE"]
+  SC["Scaleway (France)<br/>LLM de secours"]
+  R["Render (Francfort)<br/>hébergement + PostgreSQL"]
+  U -- "HTTPS : audio, consultation" --> S
+  A -- "HTTPS : /metriques, /health, admin" --> S
+  S -- "audio → texte" --> M
+  S -- "transcription → JSON émotion + prompt" --> M
+  S -. "si Mistral indisponible" .-> SC
+  S -- "prompt d'image seul (sans transcription)" --> B
+  S --- R
+  classDef sys fill:#3B2F6B,color:#fff,stroke:#3B2F6B
+  classDef ext fill:#eeeeee,color:#222,stroke:#888
+  classDef person fill:#DFF3E3,color:#222,stroke:#4a8
+  class S sys
+  class M,B,SC,R ext
+  class U,A person

@@ -1,0 +1,46 @@
+sequenceDiagram
+  autonumber
+  actor U as Rêveur (navigateur)
+  participant V as Django (vues)
+  participant P as pipeline.py
+  participant DB as PostgreSQL
+  participant M as Mistral
+  participant B as BFL (UE)
+  U->>V: POST /dreams/new (audio + consentement)
+  V->>DB: vérifie consentement, budget du mois
+  alt consentement absent ou budget atteint
+    V-->>U: refus explicite (403 / message), aucun appel IA
+  end
+  V->>DB: Dream(status=uploaded, audio)
+  V-->>U: redirection vers « Traitement »
+  U->>V: POST step/transcribe
+  V->>P: transcribe(dream) — idempotent
+  P->>M: POST /audio/transcriptions (voxtral-mini-2602)
+  alt 429 / 5xx / timeout
+    P->>M: retry (1 s puis 3 s, Retry-After)
+  end
+  M-->>P: texte + segments
+  P->>DB: transcript, durée calculée, audio vidé, ApiCall
+  V-->>U: transcription affichée (badge Réel)
+  U->>V: POST step/analyze
+  V->>P: analyze(dream) — idempotent
+  P->>M: chat/completions JSON (mistral-small-2603)
+  alt Mistral en échec
+    P->>P: Scaleway puis mode simulé
+  end
+  P->>DB: émotion validée, thèmes, résumé, prompt d'image, ApiCall
+  V-->>U: émotion affichée
+  U->>V: POST step/image
+  V->>P: generate_image(dream) — idempotent
+  P->>B: soumission (prompt seul)
+  alt BFL répond
+    loop polling 0,5 s → 2 s
+      P->>B: statut ?
+    end
+    B-->>P: URL du résultat (domaine bfl.ai vérifié)
+    P->>B: téléchargement de l'image
+    P->>DB: image, source=real, status=done, ApiCall
+  else BFL en échec (erreur, délai dépassé)
+    P->>DB: image de remplacement locale, source=mock, status=done
+  end
+  V-->>U: image affichée (« générée par IA » ou « de remplacement »)

@@ -44,6 +44,10 @@ dit sur la page d'un rêve, la page « Traitement » et le tableau de bord.
 
 ## Architecture
 
+Diagrammes détaillés dans [docs/diagrams/](docs/diagrams/) (Mermaid) :
+contexte C4 (`c4_context.mmd`), conteneurs C4 (`c4_container.mmd`), modèle
+de données (`erd.mmd`) et séquence du traitement d'un rêve (`sequence.mmd`).
+
 ```mermaid
 flowchart LR
     B[Navigateur<br/>recorder.js, processing.js] -->|POST audio + consentement| V[Vues Django]
@@ -284,6 +288,7 @@ dreams/
 templates/, static/js/   pages et scripts (enregistreur, traitement, graphiques)
 tests/             suite pytest ; tests/load/ : test de charge
 scripts/           bench_latency.py (latences réelles)
-docs/              DECISIONS.md, backlog.md, charge.md, latences.csv
+docs/              DECISIONS.md, backlog.md, charge.md, latences.csv,
+                   diagrams/ (C4, modèle de données, séquence)
 Dockerfile, docker-compose.yml, render.yaml, install.sh
 ```
