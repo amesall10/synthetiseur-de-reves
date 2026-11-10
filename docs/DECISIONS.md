@@ -715,3 +715,49 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   code. Le README renvoie aux décisions plutôt que de les répéter.
 - **Écarté** : un `Makefile` (absent par défaut sous Windows) ; deux
   scripts séparés (deux fois la préparation du `.env`).
+
+## D37. Test de charge simulé et bench réel : le CPU limite, l'image domine
+
+- **Contexte** : ticket 16 (`tests/load/`, 10 puis 25 rêves simultanés en
+  mode simulé, cible < 2 s par requête hors appels IA) et
+  `scripts/bench_latency.py` (10 appels réels par API, médiane et p95).
+- **Décision (outils)** :
+  - le test de charge lit `/health` et **refuse de partir si une clé
+    d'API est configurée** : la charge ne touche jamais les vraies API. Les
+    comptes sont créés avant le départ et mesurés à part (hachage PBKDF2
+    volontairement lent, 0,76 s de CPU), puis tous les parcours partent au
+    même signal (`threading.Barrier`) ;
+  - le bench appelle chaque fournisseur par le code de l'application (même
+    client, mêmes retries) et **n'appelle jamais une API sans clé** : elle
+    figure dans le CSV avec 0 appel et « clé absente ». Voxtral n'est
+    mesuré qu'avec un vrai enregistrement (`--audio`). Les traces vont dans
+    une base SQLite en mémoire, jamais dans la base locale.
+- **Résultats du bench** (2026-11-10, `docs/latences.csv`, récit parlé de
+  122 s généré par la synthèse vocale de Windows, non versionné) :
+  Voxtral 4,0 s (p95 5,4 s), Mistral Small 1,9 s (p95 2,1 s), Scaleway non
+  mesuré (pas de clé), image BFL 38,2 s (p95 57,4 s), dont soumission
+  0,8 s, attente 36,6 s et téléchargement 0,7 s. Bout en bout pour un récit
+  de 2 minutes : environ 44 s en médiane. **La cible du cadrage (médiane
+  < 30 s, p95 < 45 s) n'est pas tenue, à cause du temps de génération chez
+  BFL** (22 à 58 s sur 10 essais, après 21 à 25 s lors des mesures de D29
+  quelques heures plus tôt). Notre polling n'y ajoute qu'une à deux
+  secondes (D29). La transcription et l'émotion, elles, sont visibles en
+  6 s environ. Réserve : l'analyse a été mesurée sur un récit court
+  (39 mots), plus court qu'un vrai récit de 2 minutes.
+- **Résultats du test de charge** (`docs/charge.md`) : aucune erreur
+  serveur. Sans limite de CPU, max 1,1 s à 10 rêves et 2,2 s à 25 (cible
+  dépassée de peu, sur l'étape image simulée). Conteneur limité à 0,5 CPU
+  (offre Starter de Render) : 2,3 s à 10, 7,7 s à 25. À 0,1 CPU (offre
+  gratuite) : 14,9 s à 10, et 14 inscriptions sur 25 hors délai. **Le
+  serveur est limité par le CPU, pas par sa conception** ; l'offre
+  gratuite convient à une démo à un ou deux utilisateurs.
+- **Ajustement** : l'image de remplacement est enregistrée en PNG sans
+  `optimize` : 33 ms de CPU au lieu de 54 ms, pour 1 Ko de plus. Le test de
+  charge n'a pas été relancé après ce changement.
+- **Pistes, non réalisées** : tester un autre modèle BFL ou d'autres
+  réglages pour réduire l'attente (sans quitter l'endpoint UE) ; une offre
+  Render payante pour une vraie démo à plusieurs ; charger la page
+  « Traitement » sans attendre l'image (déjà le cas, D29).
+- **Écarté** : un outil de charge externe (Locust, k6 : une dépendance pour
+  un scénario de 10 requêtes) ; charger les vraies API (coût, et quotas des
+  fournisseurs).

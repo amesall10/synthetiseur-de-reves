@@ -1,0 +1,8 @@
+api,modele,appels,erreurs,mediane_ms,p95_ms,min_ms,max_ms,date,remarque
+voxtral,voxtral-mini-2602,10,0,3970,5356,3388,5963,2026-11-10,"recit_2min.wav, 122 s d'audio"
+mistral,mistral-small-2603,10,0,1861,2083,1550,2084,2026-11-10,analyse d'un récit de 39 mots
+scaleway,mistral-small-3.2-24b-instruct-2506,0,0,,,,,2026-11-10,clé absente : aucun appel
+bfl,flux-3-image-klein,10,0,38219,57431,22561,57507,2026-11-10,"soumission + attente + téléchargement, endpoint UE"
+bfl_soumission,flux-3-image-klein,10,0,765,952,593,1015,2026-11-10,
+bfl_attente,flux-3-image-klein,10,0,36554,55869,21156,55890,2026-11-10,"attente du statut Ready, 20.3 interrogations en moyenne"
+bfl_telechargement,flux-3-image-klein,10,0,726,862,531,890,2026-11-10,

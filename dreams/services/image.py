@@ -548,7 +548,8 @@ def placeholder_image(emotion: str, title: str = "") -> bytes:
     draw.text((24, size[1] - 48), caption, font=small, fill=(255, 255, 255))
 
     buffer = io.BytesIO()
-    image.save(buffer, format="PNG", optimize=True)
+    # Sans « optimize » : 33 ms au lieu de 54 ms de CPU pour 1 Ko de plus (D37).
+    image.save(buffer, format="PNG")
     return buffer.getvalue()
 
 

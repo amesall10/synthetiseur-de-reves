@@ -10,7 +10,7 @@ d'erreur 500.
 
 Projet individuel RNCP 36146 (Concepteur développeur de solutions digitales).
 Les choix techniques sont justifiés dans [docs/DECISIONS.md](docs/DECISIONS.md)
-(D1 à D35) et les tickets décrits dans [docs/backlog.md](docs/backlog.md).
+(D1 à D37) et les tickets décrits dans [docs/backlog.md](docs/backlog.md).
 
 ## Sommaire
 
@@ -21,9 +21,10 @@ Les choix techniques sont justifiés dans [docs/DECISIONS.md](docs/DECISIONS.md)
 5. [Coûts et budget](#coûts-et-budget)
 6. [RGPD et éthique](#rgpd-et-éthique)
 7. [Tests et qualité](#tests-et-qualité)
-8. [Déploiement](#déploiement)
-9. [Exploitation](#exploitation)
-10. [Structure du dépôt](#structure-du-dépôt)
+8. [Performances](#performances)
+9. [Déploiement](#déploiement)
+10. [Exploitation](#exploitation)
+11. [Structure du dépôt](#structure-du-dépôt)
 
 ## Fonctionnalités
 
@@ -206,6 +207,38 @@ pytest --cov=dreams --cov=accounts --cov-fail-under=70
   vérification des migrations, build Docker et test de fumée sur `/health`,
   puis déploiement sur `main`.
 
+## Performances
+
+Mesures réelles du 2026-11-10 ([docs/latences.csv](docs/latences.csv),
+`scripts/bench_latency.py`, 10 appels par API, récit parlé de 122 s) :
+
+| API | Médiane | p95 |
+|---|---|---|
+| Transcription Voxtral (122 s d'audio) | 4,0 s | 5,4 s |
+| Analyse Mistral Small | 1,9 s | 2,1 s |
+| Image BFL, au total | 38,2 s | 57,4 s |
+| dont soumission / attente / téléchargement | 0,8 / 36,6 / 0,7 s | 1,0 / 55,9 / 0,9 s |
+
+La transcription et l'émotion s'affichent environ 6 s après le dépôt ;
+l'image arrive ensuite. Presque tout le temps de bout en bout est l'attente
+de l'image chez BFL (statut `Generating`), très variable : de 22 à 58 s sur
+10 essais. La cible du cadrage (médiane < 30 s, p95 < 45 s) n'est donc pas
+tenue à cause de l'image (D37).
+
+Test de charge en mode simulé, 10 puis 25 rêves simultanés
+([docs/charge.md](docs/charge.md), `tests/load/load_test.py`) : aucune
+erreur 500. Sans limite de CPU, la cible de 2 s par requête est tenue à 10
+rêves et dépassée de peu à 25. À 0,5 CPU (offre Starter de Render), elle
+l'est presque à 10 et pas à 25. À 0,1 CPU (offre gratuite), elle ne l'est
+plus du tout.
+
+```bash
+# Le serveur doit tourner en mode simulé (le script vérifie /health).
+python tests/load/load_test.py --base-url http://localhost:8000 --users 10 25
+# Clés réelles dans .env ; une API sans clé n'est jamais appelée.
+python scripts/bench_latency.py --audio recit.wav --runs 10
+```
+
 ## Déploiement
 
 [`render.yaml`](render.yaml) décrit un service web Docker et une base
@@ -249,7 +282,8 @@ dreams/
                    budget, stats, metrics, retention, consent, audio, mock
   management/      commande purge_dreams
 templates/, static/js/   pages et scripts (enregistreur, traitement, graphiques)
-tests/             suite pytest
-docs/              DECISIONS.md, backlog.md
+tests/             suite pytest ; tests/load/ : test de charge
+scripts/           bench_latency.py (latences réelles)
+docs/              DECISIONS.md, backlog.md, charge.md, latences.csv
 Dockerfile, docker-compose.yml, render.yaml, install.sh
 ```
