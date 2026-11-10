@@ -450,3 +450,60 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   et résultat non reproductible en test) ; garder les alias en ajoutant un
   contrôle du champ `model` des réponses (on découvrirait le changement
   après l'avoir payé).
+
+## D29. BFL : attente mesurée par phase, polling progressif, connexion maintenue
+
+> Complète D23 (interrogation toutes les secondes, 60 fois au plus).
+
+- **Contexte** : en réel, l'étape image prenait 28 s (ligne `ApiCall`)
+  contre 1,5 s pour la transcription et l'analyse. `ApiCall` ne donne que
+  la durée totale ; impossible de savoir si le temps venait de la
+  soumission, de l'attente ou de notre polling.
+- **Mesure avant** (2026-11-10, 3 générations réelles, même prompt,
+  intervalle fixe de 1 s, un nouveau client HTTP par interrogation) :
+
+  | essai | total | soumission | attente | interrogations | durée d'une interrogation | téléchargement |
+  |---|---|---|---|---|---|---|
+  | 1 | 26,2 s | 1,08 s | 24,3 s | 17 | 431 ms | 0,80 s |
+  | 2 | 53,1 s | 0,67 s | 51,6 s | 36 | 434 ms | 0,81 s |
+  | 3 | 67,4 s | 0,81 s | 65,7 s | 38 | 729 ms | 0,88 s |
+
+  La soumission prend moins d'une seconde : **l'attente du résultat, côté
+  BFL (statut `Generating`), fait plus de 90 % du temps**. Chaque
+  interrogation refaisait la poignée de main TLS (430 à 730 ms), ce qui
+  retardait d'autant la détection de `Ready`.
+- **Décision** :
+  - pauses progressives 0,5 ; 0,75 ; 1,125 ; 1,69 s puis 2 s au plus
+    (`poll_delays`) : une image rapide est vue tôt, une image lente coûte
+    moins de requêtes ;
+  - une seule connexion HTTP pour toutes les interrogations
+    (`request_with_retry(..., client=...)`, la politique de retry reste
+    unique) ;
+  - budget de 90 s pour toute la génération au lieu de « 60 interrogations »
+    (dont la durée réelle dépendait du réseau), pour que le téléchargement
+    tienne encore sous le timeout Gunicorn de 120 s ; 90 interrogations au
+    plus en garde-fou ;
+  - durées de soumission, d'attente et de téléchargement mesurées à chaque
+    génération : log `event=bfl_timing submit_ms wait_ms download_ms polls`.
+- **Mesure après** (mêmes conditions, 3 générations) :
+
+  | essai | total | soumission | attente | interrogations | durée d'une interrogation | téléchargement |
+  |---|---|---|---|---|---|---|
+  | 1 | 24,1 s | 1,09 s | 21,4 s | 12 | 108 ms | 1,39 s |
+  | 2 | 24,1 s | 1,09 s | 21,2 s | 12 | 95 ms | 1,08 s |
+  | 3 | 25,1 s | 1,00 s | 20,9 s | 12 | 72 ms | 2,80 s |
+
+  Une interrogation coûte 4 à 7 fois moins cher (72 à 108 ms), et il en
+  faut 12 au lieu de 17 à 38. Le gain propre au polling se limite toutefois
+  à environ une seconde par image : **le gros de l'attente (20 s et plus)
+  est le temps de génération chez BFL**, très variable d'un essai à l'autre
+  (24 à 66 s avant, 21 s après). Trois essais ne suffisent pas à conclure
+  sur cette variance, qui ne dépend pas de notre code.
+- **Conséquence pour l'interface** : la transcription et l'émotion
+  s'affichent dès que leur étape est finie, sans attendre l'image (étapes
+  appelées l'une après l'autre ; la page de détail montre un rêve analysé
+  dont l'image est en cours).
+- **Écarté** : un intervalle fixe court (0,5 s : jusqu'à 130 requêtes pour
+  une image lente) ; l'endpoint global `api.bfl.ai`, peut-être plus rapide
+  mais sans garantie de traitement dans l'UE (D23) ; générer l'image en
+  arrière-plan (file de tâches exclue par le cadrage).

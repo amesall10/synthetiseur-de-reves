@@ -20,7 +20,7 @@ import io
 import logging
 import textwrap
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Protocol
@@ -117,21 +117,81 @@ class BflTaskFailed(ImageGenerationError):
     """BFL a terminé la tâche sans image (modération, erreur) : rien n'est facturé."""
 
 
+@dataclass
+class BflTiming:
+    """Durées d'une génération BFL, phase par phase (D29).
+
+    Attributes:
+        submit_ms: Soumission du prompt (jusqu'à la réception de ``polling_url``).
+        wait_ms: Attente du résultat (interrogations et pauses comprises).
+        download_ms: Téléchargement de l'image.
+        polls: Nombre d'interrogations.
+    """
+
+    submit_ms: int = 0
+    wait_ms: int = 0
+    download_ms: int = 0
+    polls: int = 0
+
+
+def poll_delays(initial: float = 0.5, factor: float = 1.5, maximum: float = 2.0) -> Iterator[float]:
+    """Pauses entre deux interrogations : courtes au début, puis espacées.
+
+    Suite 0,5 ; 0,75 ; 1,125 ; 1,69 ; puis 2 s : une image rapide est vue
+    tôt, une image lente ne déclenche pas une requête par demi-seconde.
+
+    Args:
+        initial: Première pause, en secondes.
+        factor: Multiplicateur appliqué à chaque interrogation.
+        maximum: Pause maximale.
+
+    Yields:
+        La pause à observer avant chaque interrogation.
+    """
+    delay = initial
+    while True:
+        yield round(delay, 3)
+        delay = min(delay * factor, maximum)
+
+
+def _elapsed_ms(start: float) -> int:
+    """Millisecondes écoulées depuis ``start`` (horloge monotone).
+
+    Args:
+        start: Instant de départ, lu sur ``http_service._monotonic``.
+
+    Returns:
+        La durée en millisecondes.
+    """
+    return int((http_service._monotonic() - start) * 1000)
+
+
 class BflProvider:
     """Fournisseur Black Forest Labs, modèle FLUX le moins cher à ~1024 px.
 
     Une génération = une seule ligne ``ApiCall`` : soumission, interrogations
     et téléchargement sont regroupés, et la latence mesure l'attente réelle.
+    Les durées de chaque phase sont journalisées (``event=bfl_timing``) et
+    gardées dans ``last_timing``.
     """
 
     name = "bfl"
     PENDING_STATUSES = frozenset({"Pending", "Reasoning", "Generating"})
-    POLL_INTERVAL_SECONDS = 1.0
-    # 60 interrogations à 1 s : la génération doit aboutir en une minute.
-    MAX_POLLS = 60
+    POLL_INITIAL_SECONDS = 0.5
+    POLL_BACKOFF = 1.5
+    POLL_MAX_INTERVAL_SECONDS = 2.0
+    # Garde-fou en nombre d'interrogations, en plus du budget de temps.
+    MAX_POLLS = 90
+    # Budget de toute la génération : le téléchargement (20 s au plus) doit
+    # encore tenir sous le timeout Gunicorn de 120 s.
+    MAX_GENERATION_SECONDS = 90.0
     SUBMIT_TIMEOUT_SECONDS = 20.0
     POLL_TIMEOUT_SECONDS = 10.0
     DOWNLOAD_TIMEOUT_SECONDS = 20.0
+
+    def __init__(self) -> None:
+        """Prépare un fournisseur sans mesure."""
+        self.last_timing = BflTiming()
 
     def is_configured(self) -> bool:
         """Indique si la clé BFL est présente.
@@ -149,12 +209,17 @@ class BflProvider:
         """
         return {"x-key": settings.BFL_API_KEY, "accept": "application/json"}
 
-    def _poll(self, polling_url: str, meta: CallMeta) -> str:
+    def _poll(self, polling_url: str, meta: CallMeta, deadline: float) -> str:
         """Interroge la tâche jusqu'à obtenir l'URL de l'image.
+
+        Une seule connexion est ouverte pour toutes les interrogations : sans
+        cela, chaque requête refaisait la poignée de main TLS (430 à 730 ms
+        mesurés par interrogation, D29).
 
         Args:
             polling_url: URL renvoyée à la soumission.
             meta: Contexte de l'appel.
+            deadline: Instant (horloge monotone) au-delà duquel on abandonne.
 
         Returns:
             L'URL signée de l'image.
@@ -163,25 +228,35 @@ class BflProvider:
             BflTaskFailed: Si la tâche se termine sans image (non facturée).
             ImageGenerationError: Si l'interrogation échoue ou dure trop.
         """
-        for _ in range(self.MAX_POLLS):
-            http_service._sleep(self.POLL_INTERVAL_SECONDS)
-            outcome = request_with_retry(
-                "GET",
-                polling_url,
-                self._headers(),
-                meta=meta,
-                timeout=self.POLL_TIMEOUT_SECONDS,
-                max_total_s=30.0,
-            )
-            if not outcome.ok:
-                raise ImageGenerationError(f"interrogation : {outcome.error}")
-            body = outcome.response.json()
-            status = body.get("status")
-            if status == "Ready":
-                return _require_bfl_url((body.get("result") or {}).get("sample"))
-            if status not in self.PENDING_STATUSES:
-                raise BflTaskFailed(f"tâche terminée sans image : {status}")
-        raise ImageGenerationError(f"pas d'image après {self.MAX_POLLS} interrogations")
+        delays = poll_delays(
+            self.POLL_INITIAL_SECONDS, self.POLL_BACKOFF, self.POLL_MAX_INTERVAL_SECONDS
+        )
+        with http_service._build_client(self.POLL_TIMEOUT_SECONDS) as client:
+            for delay in delays:
+                if self.last_timing.polls >= self.MAX_POLLS:
+                    break
+                if http_service._monotonic() + delay + self.POLL_TIMEOUT_SECONDS > deadline:
+                    break
+                http_service._sleep(delay)
+                self.last_timing.polls += 1
+                outcome = request_with_retry(
+                    "GET",
+                    polling_url,
+                    self._headers(),
+                    meta=meta,
+                    timeout=self.POLL_TIMEOUT_SECONDS,
+                    max_total_s=30.0,
+                    client=client,
+                )
+                if not outcome.ok:
+                    raise ImageGenerationError(f"interrogation : {outcome.error}")
+                body = outcome.response.json()
+                status = body.get("status")
+                if status == "Ready":
+                    return _require_bfl_url((body.get("result") or {}).get("sample"))
+                if status not in self.PENDING_STATUSES:
+                    raise BflTaskFailed(f"tâche terminée sans image : {status}")
+        raise ImageGenerationError(f"pas d'image après {self.last_timing.polls} interrogations")
 
     def _download(self, sample_url: str, meta: CallMeta) -> GeneratedImage:
         """Télécharge l'image depuis l'URL signée (sans clé d'API).
@@ -225,6 +300,7 @@ class BflProvider:
         """
         model = settings.BFL_MODEL
         meta = CallMeta(step=Step.IMAGE, provider=self.name, model=model, dream=dream)
+        timing = self.last_timing = BflTiming()
         start = http_service._monotonic()
         status_code: int | None = None
         attempts = 0
@@ -246,6 +322,7 @@ class BflProvider:
                 max_total_s=40.0,
             )
             status_code, attempts = submit.status_code, submit.attempts
+            timing.submit_ms = _elapsed_ms(start)
             if not submit.ok:
                 raise ImageGenerationError(f"soumission : {submit.error}")
             body = submit.response.json()
@@ -256,7 +333,16 @@ class BflProvider:
                 cost = (Decimal(str(credits)) * USD_PER_CREDIT).quantize(costs.QUANT)
             else:
                 cost = costs.to_decimal(settings.BFL_COST_PER_IMAGE_USD)
-            image = self._download(self._poll(polling_url, meta), meta)
+            wait_start = http_service._monotonic()
+            try:
+                sample_url = self._poll(
+                    polling_url, meta, deadline=start + self.MAX_GENERATION_SECONDS
+                )
+            finally:
+                timing.wait_ms = _elapsed_ms(wait_start)
+            download_start = http_service._monotonic()
+            image = self._download(sample_url, meta)
+            timing.download_ms = _elapsed_ms(download_start)
         except BflTaskFailed as err:
             cost = Decimal("0")  # « Rejected requests, failed generations… are not charged. »
             error = str(err)
@@ -268,10 +354,18 @@ class BflProvider:
             record_call(
                 meta,
                 status_code=status_code,
-                latency_ms=int((http_service._monotonic() - start) * 1000),
+                latency_ms=_elapsed_ms(start),
                 attempts=attempts,
                 cost=cost,
                 error=error,
+            )
+            logger.info(
+                "event=bfl_timing submit_ms=%d wait_ms=%d download_ms=%d polls=%d dream_id=%s",
+                timing.submit_ms,
+                timing.wait_ms,
+                timing.download_ms,
+                timing.polls,
+                dream.pk if dream is not None else "-",
             )
         return image
 
