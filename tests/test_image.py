@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 from decimal import Decimal
 
 import httpx
@@ -143,13 +144,20 @@ class TestProviderSelection:
         call = only_success()
         assert (call.provider, call.source, call.dream) == ("mock", Source.MOCK, dream)
 
-    def test_unknown_provider_falls_back(self, settings: SettingsWrapper) -> None:
-        """Un fournisseur inconnu : mode dégradé plutôt qu'une erreur."""
+    def test_unknown_provider_falls_back(
+        self, settings: SettingsWrapper, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Un fournisseur inconnu : mode dégradé, mais jamais en silence."""
         settings.IMAGE_PROVIDER = "dalle"
 
-        _, _, source = generate_image("x")
+        with caplog.at_level(logging.ERROR, logger="dreams.services.image"):
+            _, _, source = generate_image("x")
 
         assert source == Source.MOCK
+        assert any(
+            "event=image_provider_unknown provider='dalle'" in r.getMessage()
+            for r in caplog.records
+        )
 
     def test_bfl_without_key_falls_back(self, settings: SettingsWrapper, fake_api: FakeApi) -> None:
         """BFL choisi mais sans clé : mock, sans appel réseau."""

@@ -278,6 +278,92 @@ class BflProvider:
 
 PROVIDERS: dict[str, Callable[[], ImageProvider]] = {"bfl": BflProvider}
 
+# Problèmes de configuration qui font basculer en mode simulé.
+PROBLEM_UNKNOWN = "unknown"
+PROBLEM_NOT_CONFIGURED = "not_configured"
+
+
+@dataclass(frozen=True)
+class ProviderStatus:
+    """Fournisseur d'images demandé par la configuration, et celui réellement utilisé.
+
+    Attributes:
+        requested: Valeur normalisée de ``IMAGE_PROVIDER``.
+        active: Fournisseur réellement utilisé (``mock`` en cas de problème).
+        problem: ``""``, ``PROBLEM_UNKNOWN`` ou ``PROBLEM_NOT_CONFIGURED``.
+    """
+
+    requested: str
+    active: str
+    problem: str = ""
+
+    @property
+    def warning(self) -> str:
+        """Message lisible décrivant le problème, vide s'il n'y en a pas.
+
+        Returns:
+            Le message d'avertissement, en français.
+        """
+        if self.problem == PROBLEM_UNKNOWN:
+            known = ", ".join(known_providers())
+            return (
+                f"IMAGE_PROVIDER={self.requested!r} est inconnu (valeurs possibles : "
+                f"{known}) ; les images sont simulées."
+            )
+        if self.problem == PROBLEM_NOT_CONFIGURED:
+            return (
+                f"IMAGE_PROVIDER={self.requested!r} est choisi mais sa clé d'API est "
+                "absente ; les images sont simulées."
+            )
+        return ""
+
+
+def known_providers() -> list[str]:
+    """Liste les valeurs acceptées par ``IMAGE_PROVIDER``.
+
+    Returns:
+        ``mock`` suivi des fournisseurs réels, par ordre alphabétique.
+    """
+    return ["mock", *sorted(PROVIDERS)]
+
+
+def provider_status() -> ProviderStatus:
+    """Résout ``IMAGE_PROVIDER`` sans appeler aucune API.
+
+    Returns:
+        Le fournisseur demandé, celui qui sera utilisé et l'éventuel problème.
+    """
+    name = settings.IMAGE_PROVIDER.strip().lower()
+    if name == "mock":
+        return ProviderStatus(requested=name, active="mock")
+    factory = PROVIDERS.get(name)
+    if factory is None:
+        return ProviderStatus(requested=name, active="mock", problem=PROBLEM_UNKNOWN)
+    if not factory().is_configured():
+        return ProviderStatus(requested=name, active="mock", problem=PROBLEM_NOT_CONFIGURED)
+    return ProviderStatus(requested=name, active=name)
+
+
+def log_provider_status() -> ProviderStatus:
+    """Journalise un avertissement si la configuration image pose problème.
+
+    Appelée au démarrage de l'application (``DreamsConfig.ready``), pour
+    qu'une faute de frappe comme ``bf1`` se voie dans les logs dès le
+    déploiement, et pas seulement au premier rêve.
+
+    Returns:
+        Le statut calculé.
+    """
+    status = provider_status()
+    if status.problem:
+        logger.warning(
+            "event=image_provider_misconfigured provider=%r problem=%s active=mock message=%r",
+            status.requested,
+            status.problem,
+            status.warning,
+        )
+    return status
+
 
 # ---------------------------------------------------------------------------
 # Image de remplacement (mode simulé et mode dégradé)
@@ -391,21 +477,20 @@ def generate_image(
         Le tuple ``(octets, type MIME, source)`` ; ``source`` vaut ``real``
         si le fournisseur configuré a répondu, ``mock`` sinon.
     """
-    name = settings.IMAGE_PROVIDER.strip().lower()
-    if name != "mock":
-        factory = PROVIDERS.get(name)
-        if factory is None:
-            logger.error("event=image_provider_unknown provider=%s", name)
-        else:
-            provider = factory()
-            if not provider.is_configured():
-                logger.warning("event=image_provider_not_configured provider=%s", name)
-            else:
-                try:
-                    image = provider.generate(prompt, dream=dream)
-                    return image.data, image.mime, Source.REAL
-                except Exception as err:  # noqa: BLE001 - filet de sécurité volontaire
-                    logger.error("event=image_fallback provider=%s reason=%r", name, str(err)[:200])
+    status = provider_status()
+    if status.problem == PROBLEM_UNKNOWN:
+        logger.error("event=image_provider_unknown provider=%r", status.requested)
+    elif status.problem == PROBLEM_NOT_CONFIGURED:
+        logger.warning("event=image_provider_not_configured provider=%r", status.requested)
+    elif status.active != "mock":
+        provider = PROVIDERS[status.active]()
+        try:
+            image = provider.generate(prompt, dream=dream)
+            return image.data, image.mime, Source.REAL
+        except Exception as err:  # noqa: BLE001 - filet de sécurité volontaire
+            logger.error(
+                "event=image_fallback provider=%s reason=%r", status.active, str(err)[:200]
+            )
 
     data = placeholder_image(emotion, title)
     record_call(

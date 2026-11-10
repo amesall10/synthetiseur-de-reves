@@ -391,3 +391,26 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   licence à suivre) ; retirer les accents dans tous les cas (texte français
   dégradé sans raison).
 
+
+## D27. `IMAGE_PROVIDER` inconnu : avertissement au démarrage et dans `/health`
+
+- **Contexte** : une faute de frappe (`IMAGE_PROVIDER=bf1` au lieu de `bfl`)
+  faisait passer l'application en mode simulé sans rien signaler avant le
+  premier rêve, et seulement dans une ligne de log par génération. Les
+  images factices pouvaient passer pour un problème de BFL.
+- **Décision** : `provider_status()` résout `IMAGE_PROVIDER` sans appel
+  réseau et indique le fournisseur demandé, celui vraiment utilisé et le
+  problème éventuel (`unknown`, ou `not_configured` si la clé manque).
+  `DreamsConfig.ready()` écrit un `WARNING`
+  `event=image_provider_misconfigured` avec les valeurs possibles, une fois
+  par processus (migrate puis chaque worker Gunicorn). Une route `/health`
+  minimale (base + fournisseur d'images, aucun secret) renvoie
+  `status=degraded` et le même message dans `warnings`. Elle reste en 200,
+  car le service fonctionne en mode simulé ; seule une base injoignable
+  donne 503. Le mode simulé reste le comportement de repli : un rêve a
+  toujours une image.
+- **Écarté** : refuser de démarrer (une faute de frappe sur un réglage
+  secondaire couperait tout le service) ; un *system check* Django
+  (Gunicorn ne les lance pas, l'avertissement n'apparaîtrait pas en
+  production) ; répondre 503 sur `/health` (un contrôle de santé de Render
+  redémarrerait en boucle un service pourtant utilisable).

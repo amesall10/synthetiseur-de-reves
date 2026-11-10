@@ -10,6 +10,7 @@ from config import views
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("health", views.health, name="health"),
     path("compte/connexion/", auth_views.LoginView.as_view(), name="login"),
     path("compte/deconnexion/", auth_views.LogoutView.as_view(), name="logout"),
     path("compte/", include("accounts.urls")),
