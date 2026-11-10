@@ -32,7 +32,7 @@ pytestmark = pytest.mark.django_db
 
 URL = "https://api.mistral.ai/v1/chat/completions"
 HEADERS = {"Authorization": "Bearer cle-de-test"}
-META = CallMeta(step=Step.ANALYZE, provider="mistral", model="mistral-small-latest")
+META = CallMeta(step=Step.ANALYZE, provider="mistral", model="mistral-small-2603")
 
 
 def ok(payload: dict | None = None) -> httpx.Response:
@@ -85,7 +85,7 @@ class TestSuccess:
         assert call.status_code == 200
         assert call.source == Source.REAL
         assert call.provider == "mistral"
-        assert call.model == "mistral-small-latest"
+        assert call.model == "mistral-small-2603"
         assert call.error == ""
         assert call.succeeded
 
@@ -108,14 +108,14 @@ class TestSuccess:
             "https://api.mistral.ai/v1/audio/transcriptions",
             HEADERS,
             meta=CallMeta(step=Step.STT, provider="mistral"),
-            data={"model": "voxtral-mini-latest", "language": "fr"},
+            data={"model": "voxtral-mini-2602", "language": "fr"},
             files={"file": ("reve.webm", b"audio", "audio/webm")},
         )
 
         request = fake_api.requests[0]
         assert request.headers["content-type"].startswith("multipart/form-data")
         body = request.read()
-        assert b"voxtral-mini-latest" in body
+        assert b"voxtral-mini-2602" in body
         assert b'filename="reve.webm"' in body
 
     def test_links_dream_and_owner(self, fake_api: FakeApi, dream_factory: DreamFactory) -> None:
@@ -388,7 +388,7 @@ class TestCostAndRecording:
 
         lines = [r.getMessage() for r in caplog.records if "event=api_call " in r.getMessage()]
         assert len(lines) == 1
-        assert "step=analyze provider=mistral model=mistral-small-latest status=200" in lines[0]
+        assert "step=analyze provider=mistral model=mistral-small-2603 status=200" in lines[0]
         assert "attempts=2" in lines[0]
         assert all("cle-de-test" not in r.getMessage() for r in caplog.records)
 

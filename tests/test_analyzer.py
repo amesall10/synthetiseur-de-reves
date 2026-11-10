@@ -114,11 +114,11 @@ class TestFallbackChain:
         call = ApiCall.objects.get()
         assert (call.provider, call.model, call.source) == (
             "mistral",
-            "mistral-small-latest",
+            "mistral-small-2603",
             Source.REAL,
         )
-        # 1000 × 0,15 $/M + 200 × 0,60 $/M
-        assert call.cost_usd == Decimal("0.000270")
+        # (1000 × 0,13 €/M + 200 × 0,51 €/M) × 1,21 $/€ = 0,00028072 $
+        assert call.cost_usd == Decimal("0.000281")
 
     def test_payload(self, fake_api: FakeApi) -> None:
         """JSON forcé, consigne système, récit en message utilisateur."""
@@ -127,7 +127,7 @@ class TestFallbackChain:
         analyze(TRANSCRIPT)
 
         body = json.loads(fake_api.requests[0].content)
-        assert body["model"] == "mistral-small-latest"
+        assert body["model"] == "mistral-small-2603"
         assert body["response_format"] == {"type": "json_object"}
         assert body["messages"][0]["role"] == "system"
         assert "image_prompt" in body["messages"][0]["content"]

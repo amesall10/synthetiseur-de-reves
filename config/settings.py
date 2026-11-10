@@ -17,8 +17,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env()
 # Le fichier .env n'est lu que s'il existe ; les variables déjà définies dans
-# l'environnement (Docker, Render, CI) restent prioritaires.
-if (BASE_DIR / ".env").is_file():
+# l'environnement (Docker, Render, CI) restent prioritaires. Les tests le
+# désactivent (DJANGO_READ_DOT_ENV=False) : un .env local ne doit pas changer
+# leur résultat ni leur fournir de clé.
+if env.bool("DJANGO_READ_DOT_ENV", default=True) and (BASE_DIR / ".env").is_file():
     environ.Env.read_env(BASE_DIR / ".env")
 
 # ---------------------------------------------------------------------------
@@ -153,13 +155,14 @@ IMAGE_PROVIDER: str = env.str("IMAGE_PROVIDER", default="mock")
 MONTHLY_BUDGET_USD: float = env.float("MONTHLY_BUDGET_USD", default=20.0)
 DREAM_RETENTION_DAYS: int = env.int("DREAM_RETENTION_DAYS", default=365)
 
-# Transcription (Voxtral). Le modèle reste surchargeable : la doc Mistral
-# recommande désormais voxtral-mini-transcribe-3 sans dire si l'alias
-# voxtral-mini-latest pointe dessus (cf. DECISIONS D17).
+# Modèles : versions datées, jamais d'alias « -latest » (D28). Ce sont les
+# versions vers lesquelles pointaient les alias lors du test réel du
+# 2026-11-10 ; un alias peut changer de modèle (et de prix) sans prévenir.
+# Transcription (Voxtral).
 MISTRAL_STT_URL: str = env.str(
     "MISTRAL_STT_URL", default="https://api.mistral.ai/v1/audio/transcriptions"
 )
-MISTRAL_STT_MODEL: str = env.str("MISTRAL_STT_MODEL", default="voxtral-mini-latest")
+MISTRAL_STT_MODEL: str = env.str("MISTRAL_STT_MODEL", default="voxtral-mini-2602")
 AUDIO_MAX_BYTES: int = env.int("AUDIO_MAX_BYTES", default=10 * 1024 * 1024)
 AUDIO_MAX_SECONDS: int = env.int("AUDIO_MAX_SECONDS", default=300)
 
@@ -167,7 +170,7 @@ AUDIO_MAX_SECONDS: int = env.int("AUDIO_MAX_SECONDS", default=300)
 MISTRAL_CHAT_URL: str = env.str(
     "MISTRAL_CHAT_URL", default="https://api.mistral.ai/v1/chat/completions"
 )
-MISTRAL_CHAT_MODEL: str = env.str("MISTRAL_CHAT_MODEL", default="mistral-small-latest")
+MISTRAL_CHAT_MODEL: str = env.str("MISTRAL_CHAT_MODEL", default="mistral-small-2603")
 SCALEWAY_CHAT_URL: str = env.str(
     "SCALEWAY_CHAT_URL", default="https://api.scaleway.ai/v1/chat/completions"
 )
@@ -181,14 +184,18 @@ BFL_API_BASE: str = env.str("BFL_API_BASE", default="https://api.eu.bfl.ai")
 BFL_MODEL: str = env.str("BFL_MODEL", default="flux-3-image-klein")
 BFL_COST_PER_IMAGE_USD: float = env.float("BFL_COST_PER_IMAGE_USD", default=0.009)
 
-# Coûts unitaires en USD (relevés sur docs.mistral.ai le 2026-11-09, D18).
-VOXTRAL_COST_PER_MINUTE_USD: float = env.float("VOXTRAL_COST_PER_MINUTE_USD", default=0.0035)
-MISTRAL_INPUT_COST_PER_M_USD: float = env.float("MISTRAL_INPUT_COST_PER_M_USD", default=0.15)
-MISTRAL_OUTPUT_COST_PER_M_USD: float = env.float("MISTRAL_OUTPUT_COST_PER_M_USD", default=0.6)
-# Scaleway affiche 0,15 € / 0,35 € par million de tokens : on retient par
-# prudence les tarifs Mistral en dollars, plus élevés (D20).
-SCALEWAY_INPUT_COST_PER_M_USD: float = env.float("SCALEWAY_INPUT_COST_PER_M_USD", default=0.15)
-SCALEWAY_OUTPUT_COST_PER_M_USD: float = env.float("SCALEWAY_OUTPUT_COST_PER_M_USD", default=0.6)
+# Tarifs dans la devise de facturation de chaque fournisseur (D28) : Mistral
+# et Scaleway facturent en euros, BFL en dollars. Les coûts sont stockés en
+# USD ; les euros sont convertis avec un taux volontairement haut (plus haut
+# de 2026 arrondi au-dessus), pour surestimer le budget plutôt que le sous-estimer.
+EUR_TO_USD_RATE: float = env.float("EUR_TO_USD_RATE", default=1.21)
+# Prix constatés sur la facture du test réel du 2026-11-10.
+VOXTRAL_COST_PER_SECOND_EUR: float = env.float("VOXTRAL_COST_PER_SECOND_EUR", default=0.0000425)
+MISTRAL_INPUT_COST_PER_M_EUR: float = env.float("MISTRAL_INPUT_COST_PER_M_EUR", default=0.13)
+MISTRAL_OUTPUT_COST_PER_M_EUR: float = env.float("MISTRAL_OUTPUT_COST_PER_M_EUR", default=0.51)
+# Grille Scaleway (lue le 2026-11-09, D20), non encore confirmée par une facture.
+SCALEWAY_INPUT_COST_PER_M_EUR: float = env.float("SCALEWAY_INPUT_COST_PER_M_EUR", default=0.15)
+SCALEWAY_OUTPUT_COST_PER_M_EUR: float = env.float("SCALEWAY_OUTPUT_COST_PER_M_EUR", default=0.35)
 
 # ---------------------------------------------------------------------------
 # Journalisation : une ligne lisible par événement, sur la sortie standard

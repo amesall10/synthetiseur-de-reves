@@ -265,8 +265,8 @@ class ChatProvider:
         api_key: Clé d'API (vide = fournisseur ignoré).
         model: Modèle demandé.
         source: ``real`` (principal) ou ``fallback`` (secours).
-        input_per_m: Prix d'un million de tokens en entrée (USD).
-        output_per_m: Prix d'un million de tokens en sortie (USD).
+        input_per_m: Prix d'un million de tokens en entrée, converti en USD.
+        output_per_m: Prix d'un million de tokens en sortie, converti en USD.
     """
 
     name: str
@@ -274,8 +274,8 @@ class ChatProvider:
     api_key: str
     model: str
     source: str
-    input_per_m: float
-    output_per_m: float
+    input_per_m: Decimal
+    output_per_m: Decimal
 
     def cost_fn(self) -> Callable[[httpx.Response], Decimal]:
         """Fonction de coût pour ``post_with_retry``, basée sur ``usage``.
@@ -313,8 +313,8 @@ def providers() -> list[ChatProvider]:
             api_key=settings.MISTRAL_API_KEY,
             model=settings.MISTRAL_CHAT_MODEL,
             source=Source.REAL,
-            input_per_m=settings.MISTRAL_INPUT_COST_PER_M_USD,
-            output_per_m=settings.MISTRAL_OUTPUT_COST_PER_M_USD,
+            input_per_m=costs.eur_to_usd(settings.MISTRAL_INPUT_COST_PER_M_EUR),
+            output_per_m=costs.eur_to_usd(settings.MISTRAL_OUTPUT_COST_PER_M_EUR),
         ),
         ChatProvider(
             name="scaleway",
@@ -322,8 +322,8 @@ def providers() -> list[ChatProvider]:
             api_key=settings.SCALEWAY_API_KEY,
             model=settings.SCALEWAY_CHAT_MODEL,
             source=Source.FALLBACK,
-            input_per_m=settings.SCALEWAY_INPUT_COST_PER_M_USD,
-            output_per_m=settings.SCALEWAY_OUTPUT_COST_PER_M_USD,
+            input_per_m=costs.eur_to_usd(settings.SCALEWAY_INPUT_COST_PER_M_EUR),
+            output_per_m=costs.eur_to_usd(settings.SCALEWAY_OUTPUT_COST_PER_M_EUR),
         ),
     ]
 

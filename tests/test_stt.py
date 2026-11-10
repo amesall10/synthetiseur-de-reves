@@ -31,7 +31,7 @@ def voxtral_ok(text: str = " Je volais au-dessus de la mer.", end: float = 42.5)
     return httpx.Response(
         200,
         json={
-            "model": "voxtral-mini-latest",
+            "model": "voxtral-mini-2602",
             "text": text,
             "language": None,
             "segments": [
@@ -142,7 +142,7 @@ class TestRealMode:
         assert result.duration_s == 42.5
         call = ApiCall.objects.get()
         assert call.dream == dream
-        assert call.model == "voxtral-mini-latest"
+        assert call.model == "voxtral-mini-2602"
         assert call.cost_usd == costs.stt_cost(43)
 
     def test_request_fields(self, fake_api: FakeApi) -> None:
@@ -155,7 +155,7 @@ class TestRealMode:
         body = form_fields(request)
         assert str(request.url) == "https://api.mistral.ai/v1/audio/transcriptions"
         assert request.headers["authorization"] == "Bearer cle-de-test"
-        assert b'name="model"\r\n\r\nvoxtral-mini-latest' in body
+        assert b'name="model"\r\n\r\nvoxtral-mini-2602' in body
         assert b'name="language"\r\n\r\nfr' in body
         assert b'name="timestamp_granularities"\r\n\r\nsegment' in body
         assert b"diarize" not in body
@@ -235,11 +235,12 @@ class TestParsing:
 class TestCosts:
     """Calcul des coûts."""
 
-    def test_stt_cost_per_minute(self, settings: SettingsWrapper) -> None:
-        """90 s à 0,0035 $/min = 0,00525 $."""
-        settings.VOXTRAL_COST_PER_MINUTE_USD = 0.0035
+    def test_stt_cost_per_second(self, settings: SettingsWrapper) -> None:
+        """90 s à 0,0000425 €/s = 0,003825 €, soit 0,004628 $ à 1,21 $/€."""
+        settings.VOXTRAL_COST_PER_SECOND_EUR = 0.0000425
+        settings.EUR_TO_USD_RATE = 1.21
 
-        assert costs.stt_cost(90) == Decimal("0.005250")
+        assert costs.stt_cost(90) == Decimal("0.004628")
         assert costs.stt_cost(None) == Decimal("0")
         assert costs.stt_cost(-1) == Decimal("0")
 
@@ -250,3 +251,9 @@ class TestCosts:
         assert costs.tokens_cost(usage, 0.15, 0.6) == Decimal("0.000450")
         assert costs.tokens_cost(None, 0.15, 0.6) == Decimal("0")
         assert costs.to_decimal(Decimal("1.5")) == Decimal("1.5")
+
+    def test_eur_to_usd_uses_configured_rate(self, settings: SettingsWrapper) -> None:
+        """La conversion suit EUR_TO_USD_RATE, sans arrondi intermédiaire."""
+        settings.EUR_TO_USD_RATE = 1.1
+
+        assert costs.eur_to_usd(0.13) == Decimal("0.143")

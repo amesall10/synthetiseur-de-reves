@@ -414,3 +414,39 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   (Gunicorn ne les lance pas, l'avertissement n'apparaîtrait pas en
   production) ; répondre 503 sur `/health` (un contrôle de santé de Render
   redémarrerait en boucle un service pourtant utilisable).
+
+## D28. Modèles figés en version datée, tarifs réels dans leur devise
+
+> Complète D17 (modèle Voxtral), D18 (tarif Voxtral) et D20 (tarifs Scaleway).
+
+- **Contexte** : le test réel du 2026-11-10 montre que `voxtral-mini-latest`
+  est facturé comme `voxtral-mini-2602` (0,0000425 € par seconde) et
+  `mistral-small-latest` comme `mistral-small-2603` (0,13 € / 0,51 € par
+  million de tokens) ; FLUX 3 Image Klein coûte bien 0,009 $ l'image. Un
+  alias peut pointer demain vers un autre modèle, au comportement et au prix
+  différents, sans que rien ne change dans le code ni dans `ApiCall`.
+- **Décision** :
+  - par défaut, `voxtral-mini-2602` et `mistral-small-2603` (Scaleway et BFL
+    étaient déjà datés). Changer de modèle devient une décision visible dans
+    la config, et un test interdit le retour d'un alias `-latest` ;
+  - chaque tarif est saisi dans la devise de la facture : euros pour
+    Mistral (Voxtral **à la seconde**, comme sur la facture) et Scaleway
+    (grille 0,15 € / 0,35 €, qui remplace la prudence « tarifs Mistral en
+    dollars » de D20), dollars pour BFL. Les coûts restent stockés en USD
+    (`cost_usd`, `MONTHLY_BUDGET_USD`) ; la conversion passe par
+    `EUR_TO_USD_RATE`, fixé à 1,21 : plus haut du cours en 2026 (1,208 le
+    27 janvier), arrondi au-dessus, alors que le cours tourne autour de
+    1,12 à 1,15 en octobre et novembre. Le budget est surestimé de 5 à 8 %,
+    jamais sous-estimé ;
+  - pour un rêve type (60 s d'audio, 1 000 tokens en entrée et 200 en sortie), le coût passe de
+    0,00377 $ à 0,00337 $ hors image ; l'image (0,009 $) reste le poste
+    principal ;
+  - `config/settings_test.py` ne lit plus le `.env` local
+    (`DJANGO_READ_DOT_ENV=False`) : un `.env` qui forçait encore
+    `-latest` faisait échouer les tests en local, mais pas en CI.
+- **Écarté** : passer toute l'application en euros (renommer `cost_usd` et
+  le budget, migration pour un gain nul, BFL facturant en dollars) ; un
+  taux de change récupéré en ligne (appel réseau à chaque calcul de coût,
+  et résultat non reproductible en test) ; garder les alias en ajoutant un
+  contrôle du champ `model` des réponses (on découvrirait le changement
+  après l'avoir payé).

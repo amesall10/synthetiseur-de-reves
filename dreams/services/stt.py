@@ -92,7 +92,7 @@ def _last_segment_end(body: dict[str, Any]) -> float | None:
 
 
 def _cost(response: httpx.Response) -> Decimal:
-    """Coût d'une transcription réussie (minutes d'audio facturées).
+    """Coût d'une transcription réussie (secondes d'audio facturées).
 
     Args:
         response: Réponse HTTP réussie de Voxtral.

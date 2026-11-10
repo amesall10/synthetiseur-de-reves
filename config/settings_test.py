@@ -1,8 +1,9 @@
 """Réglages utilisés par pytest.
 
 Ce module neutralise tout ce qui pourrait sortir de la machine pendant les
-tests : les clés d'API éventuellement présentes dans un ``.env`` local sont
-vidées, de sorte qu'aucun test ne puisse appeler une vraie API (et la payer).
+tests : le ``.env`` local n'est pas lu, et les clés d'API éventuellement
+présentes dans l'environnement sont vidées, de sorte qu'aucun test ne puisse
+appeler une vraie API (et la payer).
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ from __future__ import annotations
 import os
 
 os.environ.setdefault("DJANGO_SECRET_KEY", "test-only-secret-key")
+# Le .env local (clés réelles, modèles, tarifs) n'est jamais lu pendant les tests.
+os.environ["DJANGO_READ_DOT_ENV"] = "False"
 
 from config.settings import *  # noqa: E402,F403
 
