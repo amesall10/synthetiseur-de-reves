@@ -1,0 +1,58 @@
+erDiagram
+  USER ||--o{ DREAM : "possède"
+  USER ||--o{ CONSENT_RECORD : "donne"
+  USER ||--o{ API_CALL : "consomme"
+  DREAM ||--o{ API_CALL : "déclenche"
+  DREAM |o--o{ CONSENT_RECORD : "couvert par"
+  USER {
+    int id PK
+    string username UK
+    string email
+    string password "hachage PBKDF2"
+    datetime date_joined
+  }
+  DREAM {
+    int id PK
+    int user_id FK
+    datetime created_at
+    string status "uploaded|transcribed|analyzed|done|failed"
+    string failure_reason
+    binary audio "temporaire, vidé après STT"
+    float audio_duration_s "calculée serveur"
+    text transcript
+    string emotion "6 choix"
+    float intensity "0 à 1"
+    json themes "5 max"
+    text summary
+    text image_prompt
+    binary image
+    string image_mime
+    string stt_source "real|fallback|mock"
+    string analysis_source
+    string image_source
+    decimal cost_usd
+  }
+  CONSENT_RECORD {
+    int id PK
+    int user_id FK
+    int dream_id FK "nullable"
+    string consent_type
+    string text_version
+    datetime granted_at "serveur"
+    string ip_address
+  }
+  API_CALL {
+    int id PK
+    int user_id FK
+    int dream_id FK "nullable"
+    string step "stt|analyze|image"
+    string provider
+    string model
+    int status_code
+    int latency_ms
+    int attempts
+    string source
+    decimal cost_usd
+    string error
+    datetime created_at
+  }
