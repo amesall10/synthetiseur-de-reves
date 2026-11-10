@@ -18,6 +18,15 @@ import pytest
 
 from tests.conftest import FakeApi, SettingsWrapper
 from tests.test_analyzer import MISTRAL_HOST, VALID, chat_ok
+from tests.test_image import (
+    API_HOST,
+    DELIVERY_HOST,
+    JPEG,
+    SAMPLE_URL,
+    jpeg,
+    polled,
+    submitted,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -92,6 +101,55 @@ class TestBench:
         mistral = next(s for s in bench.run_bench(2, audio_path=None) if s.api == "mistral")
 
         assert (len(mistral.values_ms), mistral.errors) == (1, 1)
+
+    def test_only_bfl_with_other_model_and_style(
+        self, fake_api: FakeApi, settings: SettingsWrapper, tmp_path: Path
+    ) -> None:
+        """--only bfl --bfl-model --styled : seul BFL, autre modèle, style de production, réglage restauré."""
+        settings.BFL_API_KEY = "cle-bfl"
+        settings.MISTRAL_API_KEY = "cle-mistral"  # ne doit pas être appelée
+        fake_api.add(submitted(cost=1.4), polled("Ready", SAMPLE_URL), host=API_HOST).add(
+            jpeg(), host=DELIVERY_HOST
+        )
+
+        series = bench.run_bench(
+            1,
+            audio_path=None,
+            only={"bfl"},
+            bfl_model="flux-2-klein-4b",
+            save_images=tmp_path,
+            styled=True,
+        )
+
+        assert [s.api for s in series] == [
+            "bfl",
+            "bfl_soumission",
+            "bfl_attente",
+            "bfl_telechargement",
+        ]
+        assert {s.model for s in series} == {"flux-2-klein-4b"}
+        submit = fake_api.requests[0]
+        assert str(submit.url).endswith("/v1/flux-2-klein-4b")
+        assert b"no watermark" in submit.content
+        assert "0.014 $" in series[0].note
+        assert (tmp_path / "flux-2-klein-4b-1.jpg").read_bytes() == JPEG
+        from django.conf import settings as live
+
+        assert live.BFL_MODEL == "flux-3-image-klein"
+
+    def test_append_keeps_other_rows(self, tmp_path: Path) -> None:
+        """--append garde les autres lignes et remplace celles de même API et modèle."""
+        output = tmp_path / "latences.csv"
+        day = date(2026, 11, 10)
+        bench.write_csv([bench.Series("bfl", "flux-3-image-klein", [1.0])], output, day)
+        bench.write_csv([bench.Series("bfl", "flux-2-klein-4b", [2.0])], output, day, append=True)
+        bench.write_csv([bench.Series("bfl", "flux-2-klein-4b", [3.0])], output, day, append=True)
+
+        rows = list(csv.DictReader(output.open(encoding="utf-8")))
+        assert [(r["modele"], r["mediane_ms"]) for r in rows] == [
+            ("flux-3-image-klein", "1"),
+            ("flux-2-klein-4b", "3"),
+        ]
 
 
 class TestLoadTest:
