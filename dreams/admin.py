@@ -11,7 +11,7 @@ from __future__ import annotations
 from django.contrib import admin
 from django.http import HttpRequest
 
-from dreams.models import ApiCall, ConsentRecord, Dream
+from dreams.models import ApiCall, ConsentRecord, Dream, UsageCarryover
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):
@@ -106,3 +106,11 @@ class ApiCallAdmin(ReadOnlyAdmin):
     list_filter = ("step", "provider", "source")
     readonly_fields = list_display + ("dream", "user")
     date_hierarchy = "created_at"
+
+
+@admin.register(UsageCarryover)
+class UsageCarryoverAdmin(ReadOnlyAdmin):
+    """Coûts reportés des comptes supprimés (aucune donnée personnelle, D34)."""
+
+    list_display = ("month", "cost_usd")
+    readonly_fields = list_display

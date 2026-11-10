@@ -57,9 +57,11 @@ def profile(request: HttpRequest) -> HttpResponse:
 def delete_account(request: HttpRequest) -> HttpResponse:
     """Supprime définitivement le compte et toutes ses données après confirmation.
 
-    La suppression de l'utilisateur entraîne celle de ses rêves et de ses
-    consentements (``on_delete=CASCADE``). La confirmation par mot de passe
-    évite une suppression déclenchée par une session laissée ouverte.
+    La suppression de l'utilisateur entraîne celle de ses rêves, de ses
+    consentements et de ses appels d'API (``on_delete=CASCADE``) ; le coût du
+    mois est d'abord reporté, sans lien avec la personne, pour que le budget
+    reste exact (D34). La confirmation par mot de passe évite une
+    suppression déclenchée par une session laissée ouverte.
 
     Args:
         request: Requête HTTP authentifiée.

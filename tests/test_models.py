@@ -97,19 +97,17 @@ class TestDeletionCascade:
         assert call.dream is None
         assert call.cost_usd == Decimal("0.001")
 
-    def test_deleting_user_removes_dreams_and_consents(
+    def test_deleting_user_removes_dreams_consents_and_api_calls(
         self, consented_dream: Dream, user: User
     ) -> None:
-        """Supprimer le compte supprime rêves et consentements ; le coût reste compté."""
-        call = self._api_call(consented_dream)
+        """Supprimer le compte supprime rêves, consentements et appels (D34)."""
+        self._api_call(consented_dream)
 
         user.delete()
 
         assert not Dream.objects.exists()
         assert not ConsentRecord.objects.exists()
-        call.refresh_from_db()
-        assert call.user is None
-        assert call.dream is None
+        assert not ApiCall.objects.exists()
 
 
 class TestConsentRecord:

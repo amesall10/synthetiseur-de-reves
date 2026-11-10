@@ -20,10 +20,11 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser
-from django.db.models import Sum
+from django.db import transaction
+from django.db.models import F, Sum
 from django.utils import timezone
 
-from dreams.models import ApiCall
+from dreams.models import ApiCall, UsageCarryover
 from dreams.services import costs
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,8 @@ def month_bounds(now: datetime | None = None) -> tuple[datetime, date]:
 def month_spent_usd(now: datetime | None = None) -> Decimal:
     """Dépenses d'API du mois en cours, tous utilisateurs et toutes étapes confondus.
 
+    Comprend le coût reporté des comptes supprimés ce mois-ci (D34).
+
     Args:
         now: Instant de référence (par défaut, maintenant).
 
@@ -105,7 +108,33 @@ def month_spent_usd(now: datetime | None = None) -> Decimal:
     """
     start, _ = month_bounds(now)
     total = ApiCall.objects.filter(created_at__gte=start).aggregate(total=Sum("cost_usd"))
-    return total["total"] or Decimal("0")
+    carried = UsageCarryover.objects.filter(month=start.date()).values_list("cost_usd", flat=True)
+    return (total["total"] or Decimal("0")) + sum(carried, Decimal("0"))
+
+
+def carry_over_user_costs(user: AbstractBaseUser, now: datetime | None = None) -> Decimal:
+    """Reporte le coût du mois d'un compte sur le point d'être supprimé.
+
+    Appelée juste avant la suppression du compte (signal ``pre_delete``),
+    qui supprime ses ``ApiCall`` : le montant est ajouté, sans aucun lien
+    avec la personne, au report anonyme du mois.
+
+    Args:
+        user: Compte supprimé.
+        now: Instant de référence (par défaut, maintenant).
+
+    Returns:
+        Le montant reporté (0 si le compte n'a rien coûté ce mois-ci).
+    """
+    start, _ = month_bounds(now)
+    total = ApiCall.objects.filter(user=user, created_at__gte=start).aggregate(
+        total=Sum("cost_usd")
+    )["total"] or Decimal("0")
+    if total:
+        with transaction.atomic():
+            UsageCarryover.objects.get_or_create(month=start.date())
+            UsageCarryover.objects.filter(month=start.date()).update(cost_usd=F("cost_usd") + total)
+    return total
 
 
 def budget_status(now: datetime | None = None) -> BudgetStatus:

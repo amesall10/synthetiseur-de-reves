@@ -154,6 +154,8 @@ BFL_API_KEY: str = env.str("BFL_API_KEY", default="")
 IMAGE_PROVIDER: str = env.str("IMAGE_PROVIDER", default="mock")
 MONTHLY_BUDGET_USD: float = env.float("MONTHLY_BUDGET_USD", default=20.0)
 DREAM_RETENTION_DAYS: int = env.int("DREAM_RETENTION_DAYS", default=365)
+# Audio non transcrit (dépôt abandonné) : effacé par purge_dreams après ce délai.
+ORPHAN_AUDIO_MAX_AGE_MINUTES: int = env.int("ORPHAN_AUDIO_MAX_AGE_MINUTES", default=60)
 
 # Modèles : versions datées, jamais d'alias « -latest » (D28). Ce sont les
 # versions vers lesquelles pointaient les alias lors du test réel du

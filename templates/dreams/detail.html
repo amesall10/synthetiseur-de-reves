@@ -41,5 +41,9 @@
       <p class="mt-2 whitespace-pre-line italic text-slate-200">« {{ dream.transcript }} »</p>
     </section>
   {% endif %}
+
+  <div class="mt-8 border-t border-slate-800 pt-6">
+    <a href="{% url 'dreams:delete' dream.pk %}" class="rounded-md border border-red-800 px-4 py-2 text-sm text-red-300 hover:bg-red-950">Supprimer ce rêve</a>
+  </div>
 </article>
 {% endblock %}
