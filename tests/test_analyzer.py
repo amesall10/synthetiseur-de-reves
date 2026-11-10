@@ -268,6 +268,7 @@ class TestValidation:
 
         assert prompt.startswith("An endless dark corridor")
         assert prompt.endswith(STYLE_SUFFIX)
+        assert "no signature, no watermark" in prompt
 
     def test_missing_prompt_is_rebuilt(self) -> None:
         """Sans prompt d'image, il est reconstruit à partir de l'émotion et des thèmes."""

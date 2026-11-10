@@ -39,7 +39,10 @@ THEME_MAX_LENGTH = 40
 SUMMARY_MAX_LENGTH = 1000
 IMAGE_PROMPT_MAX_LENGTH = 800
 DEFAULT_INTENSITY = 0.5
-STYLE_SUFFIX = "dreamlike, surreal atmosphere, painterly, no text, no letters, no watermark"
+# « no signature » : une fausse signature est apparue lors du bench BFL (D38).
+STYLE_SUFFIX = (
+    "dreamlike, surreal atmosphere, painterly, no text, no letters, no signature, no watermark"
+)
 
 SYSTEM_PROMPT = """Tu analyses le récit d'un rêve, raconté en français par la personne qui l'a fait.
 Réponds uniquement par un objet JSON contenant exactement ces clés :
