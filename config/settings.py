@@ -58,6 +58,11 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 # (preuve de consentement). Désactivé par défaut, falsifiable sans proxy.
 USE_X_FORWARDED_FOR: bool = env.bool("USE_X_FORWARDED_FOR", default=False)
 X_FRAME_OPTIONS = "DENY"
+# Chemin de l'admin, configurable pour ne pas exposer /admin/ aux robots qui
+# testent des mots de passe. Toujours de la forme « segment/ ».
+ADMIN_URL: str = env.str("ADMIN_URL", default="admin").strip().strip("/") + "/"
+if ADMIN_URL == "/":
+    ADMIN_URL = "admin/"
 
 # ---------------------------------------------------------------------------
 # Applications

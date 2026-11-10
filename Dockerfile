@@ -33,6 +33,9 @@ RUN addgroup --system --gid 1001 app \
 USER app
 EXPOSE 8000
 
-# Migrations au démarrage (offre gratuite Render : pas de pre-deploy command),
-# puis Gunicorn sur le port fourni par la plateforme ($PORT).
-CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi --bind 0.0.0.0:${PORT} --workers ${WEB_CONCURRENCY:-2} --timeout 120 --access-logfile -"]
+# Au démarrage : migrations (offre gratuite Render : pas de pre-deploy
+# command), purge RGPD (pas de tâche planifiée non plus ; un échec ne bloque
+# pas le démarrage), puis Gunicorn sur le port fourni par la plateforme.
+# Workers à threads (D35) : une génération d'image occupe un thread 20 à 30 s
+# sans bloquer les autres requêtes ni le contrôle de santé.
+CMD ["sh", "-c", "python manage.py migrate --noinput && (python manage.py purge_dreams || echo 'purge_dreams en échec') && exec gunicorn config.wsgi --bind 0.0.0.0:${PORT} --workers ${WEB_CONCURRENCY:-2} --worker-class gthread --threads ${GUNICORN_THREADS:-4} --timeout 120 --access-logfile -"]

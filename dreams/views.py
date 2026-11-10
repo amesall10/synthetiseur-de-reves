@@ -16,7 +16,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from dreams.forms import DreamFilterForm, DreamUploadForm
 from dreams.models import Dream
-from dreams.services import budget, consent, metrics, pipeline, stats
+from dreams.services import budget, consent, metrics, pipeline, retention, stats
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +102,7 @@ def new_dream(request: HttpRequest) -> HttpResponse:
                 user=request.user, audio=form.audio_bytes, audio_mime=form.audio_mime
             )
             consent.record_consent(request.user, dream, client_ip(request))
+        retention.purge_orphan_audio()
         logger.info(
             "event=dream_uploaded dream_id=%s mime=%s bytes=%d",
             dream.pk,
