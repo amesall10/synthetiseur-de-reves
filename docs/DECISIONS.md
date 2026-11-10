@@ -761,3 +761,40 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
 - **Écarté** : un outil de charge externe (Locust, k6 : une dépendance pour
   un scénario de 10 requêtes) ; charger les vraies API (coût, et quotas des
   fournisseurs).
+
+## D38. Image : FLUX 3 Image Klein conservé face à FLUX.2 [klein] 4B
+
+> Complète D23 (choix du modèle) et D37 (latence de l'image).
+
+- **Contexte** : l'image domine le temps d'attente (D37). FLUX.2 [klein] 4B
+  (`flux-2-klein-4b`, accepté par l'endpoint UE) est annoncé comme le plus
+  rapide de la famille. Comparaison mesurée le 2026-11-10 avec
+  `scripts/bench_latency.py --only bfl --bfl-model flux-2-klein-4b`, même
+  prompt et même endpoint UE, lignes ajoutées à `docs/latences.csv` :
+
+  | | `flux-3-image-klein` | `flux-2-klein-4b` |
+  |---|---|---|
+  | Médiane / p95 (CSV) | 38,2 s / 57,4 s (10 appels) | 7,7 s / 11,3 s (5 appels) |
+  | Contrôle au même moment | 17,4 et 18,3 s (2 appels) | 6,3 à 12,2 s |
+  | Coût annoncé par BFL | 0,009 $ | 0,014 $ (+56 %) |
+  | Coût d'un rêve de 2 min | 0,0155 $ | 0,0205 $ |
+  | Fidélité au prompt « floating… dreamlike » | le phare flotte, rides, brume | 5 images sur 5 : phare posé sur un rocher ou une jetée, rendu photo |
+  | Avec le style de production | onirique, le phare flotte | peint, mais posé sur un socle, reflet déformé |
+  | Défaut relevé | aucun | une fausse signature en bas à droite (prompt sans le suffixe de production) |
+
+- **Décision** : garder `flux-3-image-klein`. FLUX.2 [klein] 4B est 2 à 5
+  fois plus rapide, mais **moins fidèle au récit**, et c'est la fidélité de
+  l'image au rêve qui fait la valeur du produit. Il coûte en plus 56 % de
+  plus par image. L'attente se supporte : l'interface affiche déjà la
+  transcription et l'émotion sans attendre l'image (D29, D30), et annonce
+  la durée de génération. La latence de l'image dépend surtout de la file
+  d'attente de BFL (**17 à 58 s** selon le moment pour le même modèle et le
+  même prompt), pas de notre code. Le suffixe de style de production gagne
+  « no signature » à côté de « no watermark », après la fausse signature
+  observée.
+- **Limites** : 5 et 3 images sur un seul prompt, c'est un jugement
+  indicatif, pas une évaluation statistique. Les images sont gardées hors
+  du dépôt (dossier `a_verifier/bench_images/`, à côté du projet).
+- **Écarté** : FLUX.2 [klein] 4B par défaut (moins fidèle, plus cher) ;
+  le choisir seulement sous forte charge chez BFL (deux rendus différents
+  pour un même produit, et aucun moyen simple de prévoir la file).

@@ -10,7 +10,7 @@ d'erreur 500.
 
 Projet individuel RNCP 36146 (Concepteur développeur de solutions digitales).
 Les choix techniques sont justifiés dans [docs/DECISIONS.md](docs/DECISIONS.md)
-(D1 à D37) et les tickets décrits dans [docs/backlog.md](docs/backlog.md).
+(D1 à D38) et les tickets décrits dans [docs/backlog.md](docs/backlog.md).
 
 ## Sommaire
 
