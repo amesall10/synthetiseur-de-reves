@@ -8,8 +8,10 @@
 
 <section class="mt-8 rounded-lg border border-slate-800 p-6">
   <h2 class="text-lg font-medium">Vos rêves</h2>
-  <p class="mt-2 text-sm text-slate-400">L'historique et le tableau de bord arrivent avec les prochains tickets.</p>
-  <a href="{% url 'dreams:new' %}" class="mt-4 inline-block rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500">Raconter un rêve</a>
+  <div class="mt-4 flex flex-wrap gap-3">
+    <a href="{% url 'dreams:new' %}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500">Raconter un rêve</a>
+    <a href="{% url 'dreams:history' %}" class="rounded-md border border-slate-700 px-4 py-2 text-sm">Mes rêves</a>
+  </div>
 </section>
 
 <section class="mt-8 rounded-lg border border-red-900 p-6">

@@ -1,0 +1,10 @@
+{# Image d'un rêve et sa mention obligatoire. Paramètres : dream, small (vignette). #}
+<figure>
+  <img src="{% url 'dreams:image' dream.pk %}"
+       alt="Image illustrant le rêve du {{ dream.created_at|date:'j F Y' }}"
+       class="{% if small %}h-24 w-24 object-cover{% else %}w-full{% endif %} rounded-lg"
+       loading="lazy">
+  <figcaption class="mt-1 text-xs text-slate-400">
+    {% if dream.image_source == "mock" %}Image de remplacement, créée sans IA{% else %}Image générée par IA{% endif %}
+  </figcaption>
+</figure>

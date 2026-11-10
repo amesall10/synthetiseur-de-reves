@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Mes rêves · Synthétiseur de rêves{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <h1 class="text-2xl font-semibold">Mes rêves</h1>
+  <a href="{% url 'dreams:new' %}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500">Raconter un rêve</a>
+</div>
+
+<form method="get" class="mt-6 grid gap-4 rounded-lg border border-slate-800 p-4 sm:grid-cols-4 sm:items-end">
+  {% if form.non_field_errors %}
+    <div class="text-sm text-red-300 sm:col-span-4">{{ form.non_field_errors }}</div>
+  {% endif %}
+  {% for field in form %}
+    <div>
+      <label for="{{ field.id_for_label }}" class="text-sm font-medium">{{ field.label }}</label>
+      {{ field }}
+      {{ field.errors }}
+    </div>
+  {% endfor %}
+  <div class="flex gap-2">
+    <button type="submit" class="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-600">Filtrer</button>
+    <a href="{% url 'dreams:history' %}" class="rounded-md border border-slate-700 px-4 py-2 text-sm">Effacer</a>
+  </div>
+</form>
+
+<p class="mt-4 text-sm text-slate-400">
+  {{ page.paginator.count }} rêve{{ page.paginator.count|pluralize }}{% if form.is_bound and form.is_valid %} correspondant aux filtres{% endif %}.
+</p>
+
+{% if page.object_list %}
+  <ul class="mt-4 space-y-3" id="dream-list">
+    {% for dream in page.object_list %}
+      <li class="rounded-lg border border-slate-800 p-4">
+        <a href="{% url 'dreams:detail' dream.pk %}" class="flex gap-4 hover:text-indigo-200">
+          {% if dream.status == "done" %}
+            <div class="shrink-0">{% include "dreams/_image.html" with small=True %}</div>
+          {% endif %}
+          <div class="min-w-0">
+            <p class="text-sm text-slate-400">{{ dream.created_at|date:"l j F Y à H:i" }}</p>
+            {% if dream.emotion %}
+              <p class="mt-1 font-medium">{{ dream.get_emotion_display }}{% if dream.intensity is not None %} · intensité {% widthratio dream.intensity 1 100 %} %{% endif %}</p>
+            {% endif %}
+            {% if dream.summary %}
+              <p class="mt-1 line-clamp-2 text-sm text-slate-300">{{ dream.summary }}</p>
+            {% elif dream.status == "failed" %}
+              <p class="mt-1 text-sm text-red-300">Échec : {{ dream.failure_reason }}</p>
+            {% else %}
+              <p class="mt-1 text-sm text-slate-400">Traitement en cours ({{ dream.get_status_display|lower }}).</p>
+            {% endif %}
+          </div>
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+
+  {% if page.has_other_pages %}
+    <nav class="mt-6 flex items-center justify-between text-sm" aria-label="Pagination">
+      {% if page.has_previous %}
+        <a href="?{% if filters_query %}{{ filters_query }}&amp;{% endif %}page={{ page.previous_page_number }}" class="rounded-md border border-slate-700 px-3 py-1.5">Précédents</a>
+      {% else %}<span></span>{% endif %}
+      <span class="text-slate-400">Page {{ page.number }} sur {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}
+        <a href="?{% if filters_query %}{{ filters_query }}&amp;{% endif %}page={{ page.next_page_number }}" class="rounded-md border border-slate-700 px-3 py-1.5">Suivants</a>
+      {% else %}<span></span>{% endif %}
+    </nav>
+  {% endif %}
+{% else %}
+  <p class="mt-6 rounded-lg border border-slate-800 p-6 text-slate-400">
+    {% if form.is_bound %}Aucun rêve ne correspond à ces filtres.{% else %}Vous n'avez encore raconté aucun rêve.{% endif %}
+  </p>
+{% endif %}
+{% endblock %}

@@ -1,4 +1,4 @@
-"""Vues de l'application ``dreams`` : dépôt, traitement, étapes et image."""
+"""Vues de l'application ``dreams`` : dépôt, traitement, étapes, historique et image."""
 
 from __future__ import annotations
 
@@ -6,16 +6,21 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST
 
-from dreams.forms import DreamUploadForm
+from dreams.forms import DreamFilterForm, DreamUploadForm
 from dreams.models import Dream
 from dreams.services import consent, pipeline
 
 logger = logging.getLogger(__name__)
+
+DREAMS_PER_PAGE = 10
+# Champs lourds ou inutiles à la liste : l'audio, l'image et les longs textes.
+LIST_DEFERRED_FIELDS = ("audio", "image", "transcript", "image_prompt")
 
 # Codes HTTP des états d'étape : jamais 500, même en cas d'échec.
 STATE_HTTP_STATUS = {
@@ -163,6 +168,50 @@ def dream_image(request: HttpRequest, pk: int) -> HttpResponse:
     response = HttpResponse(bytes(dream.image), content_type=dream.image_mime or "image/png")
     response["Cache-Control"] = "private, max-age=3600"
     return response
+
+
+@login_required
+def history(request: HttpRequest) -> HttpResponse:
+    """Historique paginé des rêves de l'utilisateur, filtrable par période et émotion.
+
+    Args:
+        request: Requête authentifiée (filtres en paramètres GET).
+
+    Returns:
+        La page d'historique.
+    """
+    form = DreamFilterForm(request.GET or None)
+    dreams = Dream.objects.filter(user=request.user).defer(*LIST_DEFERRED_FIELDS)
+    if form.is_bound:
+        dreams = form.apply(dreams)
+    page = Paginator(dreams, DREAMS_PER_PAGE).get_page(request.GET.get("page"))
+    # Les liens de pagination gardent les filtres en cours.
+    query = request.GET.copy()
+    query.pop("page", None)
+    return render(
+        request,
+        "dreams/history.html",
+        {"form": form, "page": page, "filters_query": query.urlencode()},
+    )
+
+
+@login_required
+def dream_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    """Page d'un rêve : transcription, analyse et image, même partielles.
+
+    La transcription et l'émotion s'affichent dès que leur étape est faite,
+    sans attendre l'image (D29).
+
+    Args:
+        request: Requête authentifiée.
+        pk: Identifiant du rêve.
+
+    Returns:
+        La page du rêve.
+    """
+    dream = _owned_dream(request, pk)
+    in_progress = dream.status not in (Dream.Status.DONE, Dream.Status.FAILED)
+    return render(request, "dreams/detail.html", {"dream": dream, "in_progress": in_progress})
 
 
 def go_to_new_dream(request: HttpRequest) -> HttpResponse:

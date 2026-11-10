@@ -59,11 +59,16 @@
         themes.append(el("span", "rounded-full bg-slate-800 px-3 py-1 text-xs", theme)),
       );
       box.append(themes, el("p", "mt-3 text-slate-300", data.summary || ""));
+      const notice = step.querySelector("template[data-role=notice]");
+      if (notice) box.append(notice.content.cloneNode(true));
     } else if (payload.step === "image") {
+      const figure = el("figure");
       const img = el("img", "w-full rounded-lg");
       img.src = data.image_url;
-      img.alt = "Image générée à partir du rêve";
-      box.append(img);
+      img.alt = "Image illustrant le rêve";
+      const caption = payload.source === "mock" ? "Image de remplacement, créée sans IA" : "Image générée par IA";
+      figure.append(img, el("figcaption", "mt-1 text-xs text-slate-400", caption));
+      box.append(figure);
     }
     box.classList.remove("hidden");
   }
