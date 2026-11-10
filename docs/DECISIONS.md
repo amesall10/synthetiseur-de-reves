@@ -579,3 +579,38 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   atteint (résultats « simulés » inattendus pour un rêve commencé en
   réel) ; un quota par utilisateur (pas demandé, et 20 € suffisent au
   périmètre d'une démo).
+
+## D33. Métriques depuis `ApiCall`, Sentry sans aucun contenu de rêve
+
+- **Contexte** : ticket 12 (latence p50/p95 par étape, taux de mode
+  dégradé, coût du mois, `/health`, logs, Sentry) et cibles du plan
+  qualité (médiane < 30 s et p95 < 45 s de bout en bout, dégradé < 5 %,
+  < 0,03 $ par rêve).
+- **Décision** :
+  - page `/metriques/` réservée au staff (`staff_member_required`) : elle
+    porte sur tous les utilisateurs, mais ne lit que `ApiCall` et le statut
+    des rêves, jamais leur contenu. Fenêtre de 30 jours. Percentiles
+    calculés en Python par interpolation linéaire (même méthode que NumPy) :
+    PostgreSQL a `percentile_cont`, pas SQLite, et quelques milliers de
+    latences tiennent en mémoire ;
+  - taux de mode dégradé = étapes abouties en secours ou en simulé sur
+    toutes les étapes abouties. Les lignes simulées sont exclues des
+    latences : elles valent 0 ms et feraient croire à une API instantanée.
+    Bout en bout = somme des latences de tous les appels d'un rêve complet,
+    échecs suivis d'un secours compris (c'est l'attente réelle) ;
+  - la page montre aussi l'état du budget (D32) ;
+  - `/health` (D27) indique en plus quelles clés sont présentes, en
+    booléens, jamais leur valeur. Il reste public : c'est l'appel prévu
+    avant la démo (risque R10) ;
+  - logs : rien de nouveau à ajouter ; chaque appel produit déjà une ligne
+    `event=api_call` (coût, latence, tentatives), plus `bfl_timing`,
+    `budget_exceeded` et `image_provider_misconfigured` ;
+  - Sentry seulement si `SENTRY_DSN` est défini, avec `send_default_pii`
+    désactivé, `max_request_body_size="never"` et
+    `include_local_variables=False` : une trace d'exception peut contenir
+    une transcription dans ses variables locales, qui ne doit pas partir
+    chez un tiers (art. 9). Les tests forcent un DSN vide.
+- **Écarté** : un tableau de métriques visible par tous les utilisateurs
+  (il révélerait l'activité des autres) ; stocker les percentiles (calcul
+  instantané au volume du projet) ; Sentry avec ses réglages par défaut
+  (variables locales envoyées).

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from django.conf import settings
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -14,7 +15,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from dreams.forms import DreamFilterForm, DreamUploadForm
 from dreams.models import Dream
-from dreams.services import budget, consent, pipeline, stats
+from dreams.services import budget, consent, metrics, pipeline, stats
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +240,26 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     data = stats.dashboard_stats(request.user)
     return render(
         request, "dreams/dashboard.html", {"stats": data, "chart_data": data.chart_data()}
+    )
+
+
+@staff_member_required
+def metrics_page(request: HttpRequest) -> HttpResponse:
+    """Page Métriques de l'exploitant : latences, mode dégradé, coûts, budget.
+
+    Réservée au staff : elle porte sur tous les utilisateurs (sans aucun
+    contenu de rêve, uniquement des données de ``ApiCall``).
+
+    Args:
+        request: Requête d'un membre du staff.
+
+    Returns:
+        La page des métriques.
+    """
+    return render(
+        request,
+        "dreams/metrics.html",
+        {"metrics": metrics.compute_metrics(), "budget": budget.budget_status()},
     )
 
 

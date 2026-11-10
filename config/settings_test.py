@@ -13,6 +13,8 @@ import os
 os.environ.setdefault("DJANGO_SECRET_KEY", "test-only-secret-key")
 # Le .env local (clés réelles, modèles, tarifs) n'est jamais lu pendant les tests.
 os.environ["DJANGO_READ_DOT_ENV"] = "False"
+# Aucun événement envoyé à Sentry depuis les tests.
+os.environ["SENTRY_DSN"] = ""
 
 from config.settings import *  # noqa: E402,F403
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from django.conf import settings
 from django.db import DatabaseError, connection
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -65,6 +66,15 @@ def health(request: HttpRequest) -> JsonResponse:
             "configured": image.requested,
             "active": image.active,
             "problem": image.problem or None,
+        },
+        # Clé présente ou non (jamais sa valeur) ; sans clé, l'étape est simulée.
+        "providers": {
+            "stt": {"mistral": bool(settings.MISTRAL_API_KEY)},
+            "analyze": {
+                "mistral": bool(settings.MISTRAL_API_KEY),
+                "scaleway": bool(settings.SCALEWAY_API_KEY),
+            },
+            "image": {"bfl": bool(settings.BFL_API_KEY)},
         },
         "warnings": warnings,
     }
