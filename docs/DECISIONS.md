@@ -656,3 +656,44 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
   (deuxième source de vérité, toujours écrite, alors que le report n'est
   écrit qu'à la suppression d'un compte) ; supprimer les rêves expirés un
   par un (`delete()` en masse suffit, sans signal propre au rêve).
+
+## D35. Render à Francfort, déploiement par la CI, Gunicorn à threads, purge sans cron
+
+- **Contexte** : ticket 14 (`render.yaml`, deploy hook sur `main`), plus la
+  région Francfort et un `ADMIN_URL` configurable. Deux contraintes de
+  l'offre gratuite de Render : pas de tâche planifiée, et une seule petite
+  instance.
+- **Décision** :
+  - `render.yaml` : service web Docker et PostgreSQL 16, **tous deux en
+    `frankfurt`** (données dans l'UE, comme Mistral et l'endpoint UE de
+    BFL ; cadrage, sous-traitance). Contrôle de santé sur `/health`.
+    `DJANGO_SECRET_KEY` générée par Render, `DATABASE_URL` tirée de la
+    base, clés d'API et `ADMIN_URL` en `sync: false` (saisies dans le
+    tableau de bord, jamais dans le dépôt). `IMAGE_PROVIDER=bfl` : sans
+    clé, `/health` le signale (D27) ;
+  - `autoDeploy: false` : c'est la CI qui déploie, avec un job `deploy`
+    lancé seulement sur un push sur `main`, après lint, tests et build
+    Docker. Il appelle `secrets.RENDER_DEPLOY_HOOK` sans afficher l'URL
+    (qui contient une clé), et ne fait qu'avertir si le secret manque. Le
+    test de fumée de la CI interroge désormais `/health` ;
+  - `ADMIN_URL` (par défaut `admin/`) est normalisé en « segment/ » :
+    moins de robots sur la page de connexion de l'admin ;
+  - Gunicorn en `gthread`, 2 processus × 4 threads (`WEB_CONCURRENCY`,
+    `GUNICORN_THREADS`). Une génération d'image occupe sa requête 20 à
+    30 s (D29) : avec 2 workers synchrones, deux images en cours
+    bloquaient tout le site, contrôle de santé de Render compris (risque de
+    redémarrage). Les appels d'API attendent le réseau, ce que les threads
+    font bien malgré le GIL ;
+  - purge RGPD sans cron : `purge_dreams` au démarrage du conteneur (une
+    instance gratuite s'endort après 15 minutes sans trafic, donc redémarre
+    souvent ; un échec ne bloque pas le démarrage), plus l'effacement des
+    audios orphelins à chaque dépôt de rêve (une seule requête `UPDATE`).
+    Un audio orphelin ne peut donc dépasser une heure que si l'instance
+    reste éveillée sans qu'aucun rêve soit déposé.
+- **Limites** : la base gratuite de Render expire après 30 jours, ce qui
+  suffit pour la démo et pas pour une production. La purge des rêves
+  expirés (365 jours) dépend des redémarrages, sans conséquence à
+  l'échelle de la démo.
+- **Écarté** : un *cron job* Render (payant) ; un `autoDeploy` à chaque
+  push (déploiement avant la fin des tests) ; plus de processus
+  synchrones (512 Mo de mémoire sur l'offre gratuite).

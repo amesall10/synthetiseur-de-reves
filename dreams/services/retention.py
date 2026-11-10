@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from dreams.models import Dream
@@ -38,6 +39,57 @@ class PurgeResult:
     dry_run: bool
 
 
+def _orphans(now: datetime) -> QuerySet[Dream]:
+    """Rêves dont l'audio attend depuis trop longtemps une transcription.
+
+    Args:
+        now: Instant de référence.
+
+    Returns:
+        Le queryset des rêves concernés.
+    """
+    return Dream.objects.filter(
+        audio__isnull=False,
+        created_at__lt=now - timedelta(minutes=settings.ORPHAN_AUDIO_MAX_AGE_MINUTES),
+    )
+
+
+def _clear(orphans: QuerySet[Dream]) -> int:
+    """Efface l'audio des rêves orphelins et les passe en échec.
+
+    Args:
+        orphans: Queryset de rêves orphelins.
+
+    Returns:
+        Le nombre de rêves modifiés.
+    """
+    return orphans.update(
+        audio=None,
+        status=Dream.Status.FAILED,
+        failure_reason=ORPHAN_REASON,
+        step_started_at=None,
+    )
+
+
+def purge_orphan_audio(now: datetime | None = None) -> int:
+    """Efface seulement les audios orphelins (une requête ``UPDATE``).
+
+    Appelée à chaque dépôt de rêve, en plus de ``purge_dreams`` au démarrage
+    du conteneur : l'offre gratuite de Render n'a pas de tâche planifiée
+    (D35).
+
+    Args:
+        now: Instant de référence (par défaut, maintenant).
+
+    Returns:
+        Le nombre d'audios effacés.
+    """
+    count = _clear(_orphans(now or timezone.now()))
+    if count:
+        logger.info("event=purge_orphan_audio count=%d", count)
+    return count
+
+
 def purge(now: datetime | None = None, *, dry_run: bool = False) -> PurgeResult:
     """Supprime les rêves expirés et efface les audios orphelins.
 
@@ -52,21 +104,13 @@ def purge(now: datetime | None = None, *, dry_run: bool = False) -> PurgeResult:
     expired = Dream.objects.filter(
         created_at__lt=now - timedelta(days=settings.DREAM_RETENTION_DAYS)
     )
-    orphans = Dream.objects.filter(
-        audio__isnull=False,
-        created_at__lt=now - timedelta(minutes=settings.ORPHAN_AUDIO_MAX_AGE_MINUTES),
-    ).exclude(pk__in=expired.values("pk"))
+    orphans = _orphans(now).exclude(pk__in=expired.values("pk"))
 
     if dry_run:
         result = PurgeResult(expired.count(), orphans.count(), dry_run=True)
     else:
         with transaction.atomic():
-            orphan_count = orphans.update(
-                audio=None,
-                status=Dream.Status.FAILED,
-                failure_reason=ORPHAN_REASON,
-                step_started_at=None,
-            )
+            orphan_count = _clear(orphans)
             expired_count = expired.count()
             # delete() en masse : images, transcriptions et analyses disparaissent
             # avec la ligne ; preuves de consentement et traces d'appel sont

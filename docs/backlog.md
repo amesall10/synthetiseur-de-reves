@@ -20,7 +20,7 @@ Ce fichier en garde une copie lisible hors ligne. Labels : `must`, `should`,
 | [#11](https://github.com/amesall10/synthetiseur-de-reves/issues/11) | Plafond de budget | should | `feat/11-budget` | PR |
 | [#12](https://github.com/amesall10/synthetiseur-de-reves/issues/12) | Page Métriques + /health + logs + Sentry | should | `feat/12-metriques` | PR |
 | [#13](https://github.com/amesall10/synthetiseur-de-reves/issues/13) | RGPD : consentement, suppression, purge | must | `feat/13-rgpd` | PR |
-| [#14](https://github.com/amesall10/synthetiseur-de-reves/issues/14) | Déploiement Render automatisé | infra, must | | à faire |
+| [#14](https://github.com/amesall10/synthetiseur-de-reves/issues/14) | Déploiement Render automatisé | infra, must | `feat/14-render` | PR |
 | [#15](https://github.com/amesall10/synthetiseur-de-reves/issues/15) | README, install.sh, .env.example | docs, must | | à faire |
 | [#16](https://github.com/amesall10/synthetiseur-de-reves/issues/16) | Test de charge | test, should | | à faire |
 | [#17](https://github.com/amesall10/synthetiseur-de-reves/issues/17) | Micro-vidéo + ambiance sonore | could | | **hors périmètre** |

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
@@ -17,5 +18,5 @@ urlpatterns = [
     path("compte/deconnexion/", auth_views.LogoutView.as_view(), name="logout"),
     path("compte/", include("accounts.urls")),
     path("dreams/", include("dreams.urls")),
-    path("admin/", admin.site.urls),
+    path(settings.ADMIN_URL, admin.site.urls),
 ]
