@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Tableau de bord · Synthétiseur de rêves{% endblock %}
+
+{% block head %}
+{# Chart.js via CDN, version figée (pas de build front). #}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold">Tableau de bord</h1>
+<p class="mt-2 text-sm text-slate-400">Statistiques calculées sur vos seuls rêves.</p>
+<div class="mt-2">{% include "dreams/_emotion_notice.html" %}</div>
+
+{% if stats.total %}
+  <section class="mt-6 grid gap-4 sm:grid-cols-3" id="kpis">
+    <div class="rounded-lg border border-slate-800 p-5">
+      <p class="text-sm text-slate-400">Rêves racontés</p>
+      <p class="mt-1 text-3xl font-semibold">{{ stats.total }}</p>
+    </div>
+    <div class="rounded-lg border border-slate-800 p-5">
+      <p class="text-sm text-slate-400">Émotion dominante (30 jours)</p>
+      {% if stats.dominant %}
+        <p class="mt-1 text-2xl font-semibold" id="dominant">{{ stats.dominant|join:" et " }}</p>
+        <p class="mt-1 text-xs text-slate-400">{{ stats.dominant_count }} rêve{{ stats.dominant_count|pluralize }} sur {{ stats.recent_count }}{% if stats.dominant|length > 1 %}, à égalité{% endif %}</p>
+      {% else %}
+        <p class="mt-1 text-slate-400">Aucun rêve analysé ces 30 derniers jours.</p>
+      {% endif %}
+    </div>
+    <div class="rounded-lg border border-slate-800 p-5">
+      <p class="text-sm text-slate-400">Intensité moyenne</p>
+      {% if stats.avg_intensity_all is not None %}
+        <p class="mt-1 text-3xl font-semibold" id="avg-intensity">{% if stats.avg_intensity_30d is not None %}{% widthratio stats.avg_intensity_30d 1 100 %} %{% else %}–{% endif %}</p>
+        <p class="mt-1 text-xs text-slate-400">sur 30 jours · {% widthratio stats.avg_intensity_all 1 100 %} % depuis le début</p>
+      {% else %}
+        <p class="mt-1 text-slate-400">Pas encore d'analyse.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="mt-6 grid gap-4 lg:grid-cols-2">
+    <figure class="rounded-lg border border-slate-800 p-5">
+      <figcaption class="font-medium">Rêves par semaine ({{ stats.weeks|length }} dernières semaines)</figcaption>
+      <div class="relative mt-4 h-64"><canvas id="chart-weeks" aria-label="Nombre de rêves par semaine" role="img"></canvas></div>
+    </figure>
+    <figure class="rounded-lg border border-slate-800 p-5">
+      <figcaption class="font-medium">Répartition des émotions</figcaption>
+      <div class="relative mt-4 h-64"><canvas id="chart-emotions" aria-label="Répartition des émotions" role="img"></canvas></div>
+      <ul class="mt-4 grid grid-cols-2 gap-1 text-sm text-slate-300 sm:grid-cols-3" id="emotion-table">
+        {% for row in stats.emotions %}<li>{{ row.label }} : {{ row.count }}</li>{% endfor %}
+      </ul>
+    </figure>
+  </section>
+  {{ chart_data|json_script:"dashboard-data" }}
+{% else %}
+  <p class="mt-6 rounded-lg border border-slate-800 p-6 text-slate-400">
+    Racontez un premier rêve pour voir vos statistiques.
+    <a href="{% url 'dreams:new' %}" class="ml-2 font-medium text-indigo-300 underline">Raconter un rêve</a>
+  </p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/dashboard.js' %}" defer></script>
+{% endblock %}

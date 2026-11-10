@@ -534,3 +534,24 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
 - **Écarté** : une période en liste fixe (7 j / 30 j / 1 an), moins utile
   pour retrouver un rêve précis ; la même mention « générée par IA » pour
   toutes les images (fausse pour l'image de remplacement).
+
+## D31. Tableau de bord : agrégats en base, semaines locales, égalités montrées
+
+- **Contexte** : ticket 10 (rêves par semaine, répartition des émotions,
+  émotion dominante sur 30 jours, intensité moyenne, Chart.js), agrégats
+  limités à l'utilisateur connecté.
+- **Décision** : `dreams/services/stats.py` part toujours de
+  `Dream.objects.filter(user=…)` et calcule tout en SQL (`TruncWeek`,
+  `Count`, `Avg`) ; aucun rêve n'est chargé en mémoire. Semaines du lundi
+  au dimanche **en heure de Paris**, 12 semaines, les semaines vides
+  valent 0 (sinon le graphique trompe). Les rêves en échec sont exclus ;
+  un rêve pas encore analysé compte dans les semaines, pas dans les
+  émotions. En cas d'égalité, toutes les émotions dominantes sont
+  affichées (« Heureux et Triste, à égalité ») plutôt qu'une seule tirée
+  au hasard de l'ordre SQL. Chart.js 4.4.1 par CDN, version figée ; les
+  données passent par `json_script` (échappées), et les chiffres restent
+  lisibles en HTML si le CDN est bloqué. L'avertissement « L’émotion
+  affichée est une indication, pas un diagnostic » est en tête de page.
+- **Écarté** : calculer en Python sur tous les rêves (charge linéaire) ;
+  la semaine ISO en UTC (un rêve du lundi 0 h 30 tomberait la semaine
+  précédente).
