@@ -555,3 +555,27 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
 - **Écarté** : calculer en Python sur tous les rêves (charge linéaire) ;
   la semaine ISO en UTC (un rêve du lundi 0 h 30 tomberait la semaine
   précédente).
+
+## D32. Budget : plafond global du mois, contrôlé au dépôt d'un rêve
+
+- **Contexte** : ticket 11 et risque R5 du cadrage (« dépassement du budget
+  de 20 € », repli : « refus propre des nouveaux rêves jusqu'au mois
+  suivant »). Le plafond protège le compte de l'exploitant, pas un quota
+  individuel.
+- **Décision** : `require_within_budget(user)` additionne `ApiCall.cost_usd`
+  de **tous** les utilisateurs depuis le 1er du mois à minuit, heure de
+  Paris : transcription, analyse et images, secours compris. À partir de
+  `MONTHLY_BUDGET_USD` (égalité comprise), la page « Nouveau rêve » remplace
+  le formulaire par un bandeau qui donne la date de reprise, et un POST
+  direct est refusé (503) sans rien enregistrer, ni rêve ni audio.
+  L'utilisateur sert à la journalisation (`event=budget_exceeded`).
+  `MONTHLY_BUDGET_USD` vaut 20 $, soit moins que les 20 € du cadrage.
+- **Limite assumée** : un rêve déjà commencé va au bout, pour ne pas laisser
+  un rêve à moitié traité et un audio effacé. Le dépassement possible est
+  donc borné au coût d'un rêve (environ 0,013 $) par dépôt simultané au
+  moment du seuil.
+- **Écarté** : bloquer aussi chaque étape (rêves cassés en plein
+  traitement) ; basculer les étapes en mode simulé une fois le seuil
+  atteint (résultats « simulés » inattendus pour un rêve commencé en
+  réel) ; un quota par utilisateur (pas demandé, et 20 € suffisent au
+  périmètre d'une démo).
