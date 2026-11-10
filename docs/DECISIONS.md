@@ -697,3 +697,21 @@ par le cadrage (Django, httpx synchrone, Render…) ne sont pas re-justifiés ic
 - **Écarté** : un *cron job* Render (payant) ; un `autoDeploy` à chaque
   push (déploiement avant la fin des tests) ; plus de processus
   synchrones (512 Mo de mémoire sur l'offre gratuite).
+
+## D36. Documentation : `install.sh` à deux modes, `.env.example` vérifié par un test
+
+- **Contexte** : ticket 15 (README complet, `install.sh` pour Docker et
+  venv, `.env.example` à jour).
+- **Décision** : `install.sh docker|venv`, en bash strict (`set -euo
+  pipefail`). Il crée `.env` depuis `.env.example` **sans jamais écraser un
+  `.env` existant**, et y génère une `DJANGO_SECRET_KEY` si elle est vide.
+  Il trouve Python 3.12 sous le nom `python3` (Linux, macOS) ou `python`
+  (Git Bash sous Windows), et le binaire du venv dans `bin/` ou `Scripts/`.
+  Testé pour de vrai sur une copie du dépôt le 2026-11-10 : mode venv
+  (installation, migrations, `check`) et mode docker (PostgreSQL, purge au
+  démarrage, workers gthread, `/health` en 200). Un test vérifie que chaque
+  variable lue par `settings.py` figure dans `.env.example`, et qu'aucune
+  clé n'y a de valeur : le modèle ne peut plus prendre de retard sur le
+  code. Le README renvoie aux décisions plutôt que de les répéter.
+- **Écarté** : un `Makefile` (absent par défaut sous Windows) ; deux
+  scripts séparés (deux fois la préparation du `.env`).
